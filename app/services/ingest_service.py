@@ -1,25 +1,33 @@
 import logging
-from pathlib import Path
+import numpy as np
+import pandas as pd
 
-from app.rag.index_builder import build_index, delete_index, list_chroma_collections
-from app.rag.reader import read_files
+from app.config.config import get_settings
+from app.services.embedding.EmbeddingFactory import get_embedding_service
 
 
-def ingest_and_store_embedding(files, fileName: str):
-    logging.info(f'uploading files stored in : {files}')
-    files_path: Path = read_files(files)
-    logging.info(f'uploaded files stored in : {files_path.name}')
-    build_index(fileName)
+def _get_custom_embedding(texts: list[str]):
+    """Generate a Gemini embedding for a given text."""
+    embedding_service = get_embedding_service()
+    return embedding_service.embed_batch(texts)
+
+
+async def ingest_and_store_embedding():
+    logging.info(f'uploaded files stored in : {get_settings().data_file_path}')
+    pd_data = pd.read_json(get_settings().data_file_path, lines=True)
+    data = pd_data.iloc[:-1].copy()
+    logging.info(f"Processing rows {pd_data.columns} into DB")
+    logging.info(f"Total rows selected from file: {len(data)}")
+
+    texts_to_embed: list[str] = data["overall"].tolist()
+    embeddings = _get_custom_embedding(texts_to_embed)
+    data["embeddings"] = embeddings
+
+    data_list = [(
+            row["ResumeID"], row["Name"], row["Category"], row["Education"],
+            row["Skills"], row["Summary"], np.array(row["embeddings"])
+        )
+        for _, row in data.iterrows()
+    ]
+
     logging.info(f'indexes built and stored in vector store')
-    return files
-
-
-def delete_store_embedding(name_of_collection: str):
-    logging.info(f'deleting index collection : {name_of_collection}')
-    delete_index(name_of_collection)
-    logging.info(f'deleted index collection : {name_of_collection}')
-
-
-def list_collections_chroma() -> list[str]:
-    logging.info(f'listing index collection')
-    return list_chroma_collections()

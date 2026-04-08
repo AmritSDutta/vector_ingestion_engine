@@ -5,15 +5,15 @@ from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import models, CollectionsResponse
 
-from app.config.config import Settings
-from app.rag.vector_store import VectorStore
+from app.config.config import get_settings
+from app.services.vector_store.vector_store import VectorStore
 
 
 class QdrantStore(VectorStore):
 
     def __init__(self, collection_name: Optional[str] = "insight_scope"):
         self.collection_name = collection_name
-        settings = Settings()
+        settings = get_settings()
         self.qdrant_client = QdrantClient(
             url=settings.QDRANT_HOST,
             port=settings.QDRANT_PORT,
@@ -22,7 +22,7 @@ class QdrantStore(VectorStore):
         self.reranker = TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
 
     def create(self, collection_name_overridden: Optional[str] = None):
-        settings = Settings()
+        settings = get_settings()
         effective_collection_name = collection_name_overridden if collection_name_overridden else self.collection_name
 
         try:

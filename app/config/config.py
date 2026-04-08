@@ -13,17 +13,17 @@ logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    APP_NAME: str = "InsightScope"
+    APP_NAME: str = "VectorIngestionEngine"
     ENV: str = "dev"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    EMBEDDER: str = "google"
-    VECTOR_STORE: str = "chroma"
+    EMBEDDER: str = "genai"
+    VECTOR_STORE: str = "qdrant"
     CHROMA_DIR: str = "data/chroma"
 
-    EMBEDDING_DIM: int = 256
-    EMBEDDING_MODEL: str = "text-embedding-004"
+    EMBEDDING_DIM: int = 1024
+    EMBEDDING_MODEL: str = "text-embedding-001"
     GENAI_MODEL: str = "gemini-2.5-flash-lite"
     OPENAI_MODEL: str = "gpt-5-nano"
 
@@ -32,11 +32,22 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 5
     PDF_EXTRACTOR_MODEL: str = "gemini-2.5-flash"
 
-    QDRANT_HOST: str
+    COLLECTION_NAME: str = 'resume_details'
+
+    QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
-    QDRANT_API_KEY: str
+    QDRANT_API_KEY: str = 'key'
+    DATA_FILE_PATH: str = 'data/resume_sample_160.jsonl'
 
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+
+    @property
+    def data_file_path(self) -> Path:
+        """Return absolute, validated path to the CSV."""
+        path = self.BASE_DIR / self.DATA_FILE_PATH
+        if not path.exists():
+            raise FileNotFoundError(f"data file not found at {path}")
+        return path
 
 
 _settings: Settings | None = None
