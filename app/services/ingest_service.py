@@ -4,12 +4,18 @@ import pandas as pd
 
 from app.config.config import get_settings
 from app.services.embedding.EmbeddingFactory import get_embedding_service
+from app.services.vector_store.VectoreStoreFaactory import get_vector_store
 
 
 def _get_custom_embedding(texts: list[str]):
     """Generate a Gemini embedding for a given text."""
     embedding_service = get_embedding_service()
     return embedding_service.embed_batch(texts)
+
+
+def _get_vector_Store():
+    """Generate a Gemini embedding for a given text."""
+    return get_vector_store()
 
 
 async def ingest_and_store_embedding():
@@ -29,5 +35,7 @@ async def ingest_and_store_embedding():
         )
         for _, row in data.iterrows()
     ]
-
+    vstore = _get_vector_Store()
+    vstore.create()
+    vstore.save(data)
     logging.info(f'indexes built and stored in vector store')

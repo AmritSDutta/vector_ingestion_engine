@@ -4,8 +4,7 @@ from typing import Sequence, List
 from google import genai
 
 from .base import EmbeddingService
-from ...config.Settings import Settings
-
+from ...config.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -13,10 +12,10 @@ logger = logging.getLogger(__name__)
 class GenAIEmbeddingService(EmbeddingService):
     """google genai embedding implementation as EmbeddingService."""
     def __init__(self, api_key: str = None):
-        settings = Settings()
+        settings = get_settings()
         self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         self.model: str = settings.EMBEDDING_MODEL
-        self.dimension: int = settings.EMBED_DIM
+        self.dimension: int = settings.EMBEDDING_DIM
         self.type: str = "semantic_similarity"
 
     def embed(self, texts: str,
@@ -40,7 +39,7 @@ class GenAIEmbeddingService(EmbeddingService):
             texts: Sequence[str],
             batch_size: int = 32,
             task_type: str = None,
-            output_dimensionality: int = None,
+            output_dimensionality: int = 1024,
     ):
         """Batch embedding for large text collections."""
 

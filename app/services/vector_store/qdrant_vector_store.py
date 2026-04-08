@@ -1,7 +1,8 @@
 import logging
-from typing import Sequence, Dict, Optional
+from typing import Sequence, Dict, Optional, Any
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
+from pandas import DataFrame
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import models, CollectionsResponse
 
@@ -11,9 +12,10 @@ from app.services.vector_store.vector_store import VectorStore
 
 class QdrantStore(VectorStore):
 
-    def __init__(self, collection_name: Optional[str] = "insight_scope"):
-        self.collection_name = collection_name
+    def __init__(self):
         settings = get_settings()
+        self.collection_name = settings.COLLECTION_NAME
+
         self.qdrant_client = QdrantClient(
             url=settings.QDRANT_HOST,
             port=settings.QDRANT_PORT,
@@ -23,7 +25,7 @@ class QdrantStore(VectorStore):
 
     def create(self, collection_name_overridden: Optional[str] = None):
         settings = get_settings()
-        effective_collection_name = collection_name_overridden if collection_name_overridden else self.collection_name
+        effective_collection_name = self.collection_name
 
         try:
             if self.qdrant_client.collection_exists(effective_collection_name):
@@ -44,23 +46,41 @@ class QdrantStore(VectorStore):
         except Exception as e:
             logging.error('qdrant initialization error', e)
 
-    def save(self, ids: Sequence[str], docs: Sequence[str], metas: Sequence[Dict],
-             embeddings: Sequence[Sequence[float]]):
+    def save(self, data: DataFrame):
         try:
-            payload = [
-                {**meta, "doc": doc}
-                for doc, meta in zip(docs, metas)
+
+            import numpy as np
+            data_list = [(
+                row["ResumeID"], row["Name"], row["Category"], row["Education"],
+                row["Skills"], row["Summary"], np.array(row["embeddings"])
+            )
+                for _, row in data.iterrows()
             ]
+
+            embeddings = [item[-1] for item in data_list]
+            payload = [
+                {
+                    "ResumeID": item[0],
+                    "Name": item[1],
+                    "Category": item[2],
+                    "Education": item[3],
+                    "Skills": item[4],
+                    "Summary": item[5],
+                    "doc": item[5]
+                }
+                for item in data_list
+            ]
+
             self.qdrant_client.upload_collection(
-                self.collection_name,
-                vectors=[list(row) for row in embeddings],
+                collection_name=self.collection_name,
+                vectors=[v.tolist() for v in embeddings],
                 payload=payload,
             )
             logging.info(f'uploaded data to  collection: {self.collection_name}')
         except Exception as e:
-            logging.error('qdrant persistence error', e)
+            logging.error(f'qdrant persistence error: {e}')
 
-    def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
+    def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         # 1. dense ranking
         hits = self.qdrant_client.query_points(
             collection_name=self.collection_name,
@@ -92,6 +112,7 @@ class QdrantStore(VectorStore):
 
         # 4. Sort by final score descending
         combined.sort(key=lambda x: x["final_score"], reverse=True)
+        logging.info(f'combined: {combined}')
         return {"results": combined}
 
     def delete_collection(self, name: str):

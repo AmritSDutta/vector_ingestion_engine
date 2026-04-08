@@ -1,9 +1,10 @@
 from typing import Dict, Sequence, Optional
 
+from pandas import DataFrame
+
 
 class VectorStore:
-    def save(self, ids: Sequence[str], docs: Sequence[str], metas: Sequence[Dict],
-             embeddings: Sequence[Sequence[float]]):
+    def save(self, data: DataFrame):
         raise NotImplementedError
 
     def create(self, collection_name: Optional[str] = "insight_scope"):

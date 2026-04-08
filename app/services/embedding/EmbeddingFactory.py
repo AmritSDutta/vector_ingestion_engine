@@ -13,11 +13,11 @@ def get_embedding_service():
     # Check if primary embedder is genai and if its breaker is OPEN
     if settings.EMBEDDER == "genai":
         logging.info(
-            f'embedding {settings.EMBEDDER} model to be used: {settings.EMBEDDING_MODEL}, DIMENSION: {settings.EMBED_DIM}')
+            f'embedding {settings.EMBEDDER} model to be used: {settings.EMBEDDING_MODEL}, DIMENSION: {settings.EMBEDDING_DIM}')
         return GenAIEmbeddingService()
     elif settings.EMBEDDER == "mistralai":
         logging.info(
-            f'embedding {settings.EMBEDDER} model to be used: {settings.EMBEDDING_MODEL}, DIMENSION: {settings.EMBED_DIM}')
+            f'embedding {settings.EMBEDDER} model to be used: {settings.EMBEDDING_MODEL}, DIMENSION: {settings.EMBEDDING_DIM}')
         return MistralAIEmbeddingService()
 
     raise RuntimeError("unsupported embedder")
