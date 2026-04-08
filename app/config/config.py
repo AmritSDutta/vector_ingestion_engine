@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     EMBEDDER: str = "genai"
-    VECTOR_STORE: str = "qdrant"
+    VECTOR_STORE: str = "milvus"
     CHROMA_DIR: str = "data/chroma"
 
     EMBEDDING_DIM: int = 1024
@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     QDRANT_API_KEY: str = 'key'
     DATA_FILE_PATH: str = 'data/resume_sample_160.jsonl'
+
+    MILVUS_URI: str = "localhost"
+    MILVUS_TOKEN: str = "TOKEN"
 
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
 

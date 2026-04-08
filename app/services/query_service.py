@@ -23,7 +23,6 @@ async def query_handler(user_query: str, top_k: int = 20) -> dict[str, list[Any]
     embeddings = _get_custom_embedding(texts_to_embed)
 
     vstore = _get_vector_Store()
-    vstore.create()
     response: dict[str, list[Any]] = vstore.query(embeddings[0], n_results=top_k, query=user_query)
     logging.info(f'response: {response}')
     return response
