@@ -8,7 +8,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import models, CollectionsResponse, UpdateResult
 
 from app.config.config import get_settings
-from app.services.vector_store.vector_store import VectorStore
+from app.services.vector_store.vector_store import VectorStore, get_reranker_model
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class QdrantStore(VectorStore):
         )
         self.bm25_embedding_model = SparseTextEmbedding("Qdrant/bm25", threads=2)
         self.late_interaction_embedding_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0", threads=4)
-        self.reranker = TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
+        self.reranker = get_reranker_model()
 
     def create(self, collection_name_overridden: Optional[str] = None):
         settings = get_settings()

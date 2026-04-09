@@ -41,11 +41,12 @@ async def delete_collections(collection_name: Optional[str] = None) -> str:
 @ingest_router.get("/collections", response_model=list[str])
 async def list_collections() -> list[str]:
     """
-    delete vector store
+    list collections from vector store
     """
     try:
-        return []
+        vstore = _get_vector_store()
+        return vstore.list_collection()
 
     except Exception as exc:
-        logging.error('chroma collection delete errors %s', exc)
+        logging.error('collection list errors %s', exc)
         raise HTTPException(status_code=500, detail=str(exc))

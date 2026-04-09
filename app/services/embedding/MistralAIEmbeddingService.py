@@ -25,7 +25,7 @@ class MistralAIEmbeddingService(EmbeddingService):
             model=self.model,
             inputs=[texts],
         )
-        print(len(resp.data[0].embedding))
+        logging.debug(len(resp.data[0].embedding))
         return resp.data[0].embedding
 
     def embed_batch(

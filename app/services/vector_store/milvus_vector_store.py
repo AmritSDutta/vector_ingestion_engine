@@ -1,12 +1,11 @@
 import logging
 from typing import Sequence, Dict, Optional, Any
 
-from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
 from pymilvus import MilvusClient, DataType, Function, FunctionType, MilvusException, AnnSearchRequest
 
 from app.config.config import get_settings
-from app.services.vector_store.vector_store import VectorStore
+from app.services.vector_store.vector_store import VectorStore, get_reranker_model
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +22,14 @@ class MilvusStore(VectorStore):
             timeout=30,
             secure=True
         )
-        print(f"Connected to DB: {settings.MILVUS_URI} successfully")
+        logging.info(f"Connected to DB: {settings.MILVUS_URI} successfully")
 
         # Check if the collection exists
         check_collection = self.client.has_collection(self.collection_name)
 
         if check_collection:
-            print(f"Existing collection {self.collection_name} confirmed")
-        self.reranker = TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
+            logging.info(f"Existing collection {self.collection_name} confirmed")
+        self.reranker = get_reranker_model()
 
     def create(self, collection_name_overridden: Optional[str] = None):
         settings = get_settings()

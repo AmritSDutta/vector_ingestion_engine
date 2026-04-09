@@ -1,15 +1,11 @@
-from typing import Dict, Sequence, Optional, Any
+from typing import Optional, Sequence, Dict, Any
 
-from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
 
-
-def get_reranker_model() -> TextCrossEncoder:
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
-    return TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
+from app.services.vector_store.vector_store import VectorStore
 
 
-class VectorStore:
+class PGVectorStore(VectorStore):
     def save(self, data: DataFrame):
         raise NotImplementedError
 
