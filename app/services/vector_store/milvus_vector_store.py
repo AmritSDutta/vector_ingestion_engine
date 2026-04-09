@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence, Dict, Optional, Any
+from typing import Sequence, Dict, Optional
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
@@ -11,16 +11,10 @@ from app.services.vector_store.vector_store import VectorStore
 
 class MilvusStore(VectorStore):
 
-    def __init__(self, collection_name: Optional[str] = "insight_scope"):
+    def __init__(self, collection_name: Optional[str] = "resume_details"):
         settings = get_settings()
-        self.collection_name = settings.COLLECTION_NAME
-        '''
-        self.client = MilvusClient(
-            uri=settings.MILVUS_URI,
-            token=settings.MILVUS_TOKEN,
-            # db_name=settings.MILVUS_DB_NAME
-        )
-        '''
+        self.collection_name = collection_name if collection_name else settings.COLLECTION_NAME
+
         self.client = MilvusClient(
             uri=settings.MILVUS_URI,
             token=settings.MILVUS_TOKEN,
@@ -33,9 +27,7 @@ class MilvusStore(VectorStore):
         check_collection = self.client.has_collection(self.collection_name)
 
         if check_collection:
-            self.client.drop_collection(self.collection_name)
-            print(f"Dropped the existing collection {self.collection_name} successfully")
-
+            print(f"Existing collection {self.collection_name} confirmed")
         self.reranker = TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
 
     def create(self, collection_name_overridden: Optional[str] = None):
@@ -47,8 +39,8 @@ class MilvusStore(VectorStore):
             logging.info(f"Collection {coll_name} already exists.")
             return
 
-        schema = self.client.create_schema(auto_id=True, enable_dynamic_field=True)
-        schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True)
+        schema = self.client.create_schema(auto_id=False, enable_dynamic_field=True)
+        schema.add_field(field_name="ResumeID", datatype=DataType.VARCHAR, is_primary=True, max_length=100)
         schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=settings.EMBEDDING_DIM)
 
         index_params = self.client.prepare_index_params()
@@ -75,8 +67,8 @@ class MilvusStore(VectorStore):
             insert_data = []
             for _, row in data.iterrows():
                 record = {
-                    "vector": np.array(row["embeddings"]).tolist(),
                     "ResumeID": row["ResumeID"],
+                    "vector": np.array(row["embeddings"]).tolist(),
                     "Name": row["Name"],
                     "Category": row["Category"],
                     "Education": row["Education"],
@@ -121,6 +113,14 @@ class MilvusStore(VectorStore):
         combined.sort(key=lambda x: x["final_score"], reverse=True)
         return {"results": combined}
 
-    def delete_collection(self, name: str):
-        self.client.drop_collection(collection_name=name)
-        logging.info(f"Deleted Milvus collection: {name}")
+    def delete_collection(self, name: Optional[str] = None)-> Optional[str]:
+        if name is not None and name != self.collection_name:
+            logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
+            return None
+
+        check_collection = self.client.has_collection(self.collection_name)
+        if check_collection:
+            logging.info(f"dropping Existing collection {self.collection_name} confirmed")
+            self.client.drop_collection(self.collection_name)
+        logging.info(f"Deleted Milvus collection if existed: {self.collection_name}")
+        return self.collection_name

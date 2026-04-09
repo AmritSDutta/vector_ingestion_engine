@@ -2,12 +2,12 @@ import logging
 import os
 import tempfile
 import uuid
-from typing import List
+from typing import List, Optional
 
 import aiofiles
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
-from app.services.ingest_service import ingest_and_store_embedding
+from app.services.ingest_service import ingest_and_store_embedding, _get_vector_Store
 
 logger = logging.getLogger(__name__)
 ingest_router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -28,12 +28,14 @@ async def upload_files():
 
 
 @ingest_router.post("/delete", response_model=str)
-async def delete_collections(collection_name: str) -> str:
+async def delete_collections(collection_name: Optional[str] = None) -> str:
     """
     delete vector store
     """
     try:
-        return f'deleted collection {collection_name}'
+        vstore = _get_vector_Store()
+        response: Optional[str] = vstore.delete_collection(collection_name)
+        return f'deleted collection {response if response else 'None'}'
 
     except Exception as exc:
         logging.error('chroma collection delete errors %s', exc)
