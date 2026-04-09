@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def get_embedding_service():
     settings = Settings()
-    
+
     # Check if primary embedder is genai and if its breaker is OPEN
     if settings.EMBEDDER == "genai":
         logging.info(

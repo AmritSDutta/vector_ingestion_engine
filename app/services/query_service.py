@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any
 
 from app.services.embedding.EmbeddingFactory import get_embedding_service
 from app.services.vector_store.VectoreStoreFaactory import get_vector_store

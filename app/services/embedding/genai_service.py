@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class GenAIEmbeddingService(EmbeddingService):
     """google genai embedding implementation as EmbeddingService."""
+
     def __init__(self, api_key: str = None):
         settings = get_settings()
         self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
@@ -69,4 +70,3 @@ class GenAIEmbeddingService(EmbeddingService):
             final_embeddings.extend([e.values for e in resp.embeddings])
 
         return final_embeddings
-

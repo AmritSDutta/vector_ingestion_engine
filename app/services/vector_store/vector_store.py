@@ -22,4 +22,3 @@ class VectorStore:
     def hybrid_search(self, query_embedding: Sequence[float],
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         raise NotImplementedError
-

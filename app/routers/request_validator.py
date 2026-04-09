@@ -1,10 +1,10 @@
 import html
 import logging
 import re
+
 from fastapi import HTTPException
 from openai import OpenAI, RateLimitError, APIError, APIConnectionError
 from openai.types import ModerationCreateResponse
-
 
 logger = logging.getLogger(__name__)
 # Expanded, Docker-aware threat patterns
@@ -14,8 +14,8 @@ MALICIOUS_PATTERNS = [
 
     # Shell metacharacters commonly used for injection ( | && ` $() <> {})
     r"[&|`$<>]",
-    r"\$\((.*?)\)",            # $(cmd)
-    r"`[^`]+`",                # `cmd`
+    r"\$\((.*?)\)",  # $(cmd)
+    r"`[^`]+`",  # `cmd`
 
     # Command injection one-liners
     r"(?i)\b(bash\s+-c|sh\s+-c|python\s+-c|perl\s+-e|php\s+-r|ruby\s+-e|node\s+-e)\b",
@@ -101,4 +101,3 @@ def do_moderation(user_input: str):
             status_code=503,
             detail=f"Moderation service unavailable: {e}"
         )
-
