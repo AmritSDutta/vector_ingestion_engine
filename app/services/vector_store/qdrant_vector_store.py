@@ -129,6 +129,7 @@ class QdrantStore(VectorStore):
         hits = self.qdrant_client.query_points(
             collection_name=self.collection_name,
             query=list(query_embedding),
+            using="genai",
             limit=n_results).points
         # Extract descriptions for reranking
         descriptions = [hit.payload["doc"] for hit in hits]
@@ -180,39 +181,33 @@ class QdrantStore(VectorStore):
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         from qdrant_client.http import models
 
-        # 1. Generate sparse and multi-vector query components
+        # 1. Generate query components locally using FastEmbed
         sparse_query = next(self.bm25_embedding_model.query_embed(query))
         colbert_query = next(self.late_interaction_embedding_model.query_embed(query))
 
-        # 2. Retrieve candidates via Prefetch and RRF Fusion
-        search_result = self.qdrant_client.query_points(
+        # 2. Single-call Multi-stage Search: (Dense + Sparse) -> RRF -> ColBERT Rerank
+        response = self.qdrant_client.query_points(
             collection_name=self.collection_name,
             prefetch=[
-                models.Prefetch(query=query_embedding, using="genai", limit=n_results * 10),
                 models.Prefetch(
-                    query=models.SparseVector(
-                        indices=sparse_query.indices.tolist(),
-                        values=sparse_query.values.tolist()
-                    ),
-                    using="bm25",
-                    limit=n_results * 10
-                ),
-                models.Prefetch(query=colbert_query.tolist(), using="colbert", limit=n_results * 10),
+                    prefetch=[
+                        models.Prefetch(query=query_embedding, using="genai", limit=n_results * 10),
+                        models.Prefetch(
+                            query=models.SparseVector(
+                                indices=sparse_query.indices.tolist(),
+                                values=sparse_query.values.tolist()
+                            ),
+                            using="bm25",
+                            limit=n_results * 10
+                        ),
+                    ],
+                    query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    limit=n_results * 10  # This pool is sent to ColBERT reranking
+                )
             ],
-            query=models.FusionQuery(fusion=models.Fusion.RRF),
-            limit=n_results * 10
+            query=colbert_query.tolist(),  # The "Reranker"
+            using="colbert",
+            limit=n_results
         )
 
-        points = search_result.points
-        if not points:
-            return {"results": []}
-
-        # 3. Apply Cross-Encoder Reranking
-        docs = [p.payload.get("doc", "") for p in points]
-        # The error indicates 'rerank' returns a list of floats
-        scores = list(self.reranker.rerank(query, docs))
-
-        # Pair scores with points and sort by the float score (index 0 of tuple)
-        scored_points = sorted(zip(scores, points), key=lambda x: x[0], reverse=True)
-
-        return {"results": [p[1].payload for p in scored_points[:n_results]]}
+        return {"results": [p.payload for p in response.points]}
