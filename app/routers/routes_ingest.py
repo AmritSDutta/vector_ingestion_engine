@@ -30,7 +30,7 @@ async def delete_collections(collection_name: Optional[str] = None) -> str:
     """
     try:
         vstore = _get_vector_store()
-        response: Optional[str] = vstore.delete_collection(collection_name)
+        response: Optional[str] = await vstore.delete_collection(collection_name)
         return f'deleted collection {response if response else 'None'}'
 
     except Exception as exc:
@@ -45,7 +45,7 @@ async def list_collections() -> list[str]:
     """
     try:
         vstore = _get_vector_store()
-        return vstore.list_collection()
+        return await vstore.list_collection()
 
     except Exception as exc:
         logging.error('collection list errors %s', exc)

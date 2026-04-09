@@ -32,6 +32,6 @@ async def ingest_and_store_embedding():
     data["embeddings"] = embeddings
 
     vstore = _get_vector_store()
-    vstore.create()
-    vstore.save(data)
+    await vstore.create()
+    await vstore.save(data)
     logging.info(f'Successfully indexes built and stored in vector store, rows: {len(data)}')

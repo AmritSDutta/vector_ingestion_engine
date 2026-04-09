@@ -31,7 +31,7 @@ class MilvusStore(VectorStore):
             logging.info(f"Existing collection {self.collection_name} confirmed")
         self.reranker = get_reranker_model()
 
-    def create(self, collection_name_overridden: Optional[str] = None):
+    async def create(self, collection_name_overridden: Optional[str] = None):
         settings = get_settings()
         coll_name = self.collection_name
 
@@ -84,7 +84,7 @@ class MilvusStore(VectorStore):
         )
         logging.info(f"Created Milvus collection: {coll_name}")
 
-    def save(self, data: DataFrame):
+    async def save(self, data: DataFrame):
         try:
             import numpy as np
             coll_name = self.collection_name
@@ -110,7 +110,7 @@ class MilvusStore(VectorStore):
         except MilvusException as milvus_exception:
             logging.error(f"Milvus persistence error: {milvus_exception}")
 
-    def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
+    async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
         # 1. Search in Milvus
         search_res = self.client.search(
             collection_name=self.collection_name,
@@ -141,7 +141,7 @@ class MilvusStore(VectorStore):
         combined.sort(key=lambda x: x["final_score"], reverse=True)
         return {"results": combined}
 
-    def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
+    async def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
         if name is not None and name != self.collection_name:
             logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
             return None
@@ -153,10 +153,10 @@ class MilvusStore(VectorStore):
         logging.info(f"Deleted Milvus collection if existed: {self.collection_name}")
         return self.collection_name
 
-    def list_collection(self) -> list[str]:
+    async def list_collection(self) -> list[str]:
         return self.client.list_collections()
 
-    def hybrid_search(self, query_embedding: Sequence[float],
+    async def hybrid_search(self, query_embedding: Sequence[float],
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         logging.info(f"Hybrid search with: {query}")
         # text semantic search (dense)

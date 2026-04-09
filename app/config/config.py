@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     MILVUS_URI: str = "localhost"
     MILVUS_TOKEN: str = "TOKEN"
 
+    DB_DSN: str = 'postgres://some_user:some_password@localhost/resume_vector_db'
+    DB_NAME: str = 'resume_vector_db'
+    DB_USER: str = 'some_user'
+    DB_PASSWORD: str = 'some_password'
+    POSTGRES_BATCH_SIZE: int = 100
+
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
 
     @property

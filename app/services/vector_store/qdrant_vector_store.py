@@ -28,7 +28,7 @@ class QdrantStore(VectorStore):
         self.late_interaction_embedding_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0", threads=4)
         self.reranker = get_reranker_model()
 
-    def create(self, collection_name_overridden: Optional[str] = None):
+    async def create(self, collection_name_overridden: Optional[str] = None):
         settings = get_settings()
         effective_collection_name = self.collection_name
 
@@ -71,7 +71,7 @@ class QdrantStore(VectorStore):
         except Exception as e:
             logging.error('qdrant initialization error', e)
 
-    def save(self, data: DataFrame):
+    async def save(self, data: DataFrame):
         try:
             import numpy as np
             from qdrant_client.http import models
@@ -124,7 +124,7 @@ class QdrantStore(VectorStore):
             logging.error(f'Qdrant persistence error: {e}')
             raise e
 
-    def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+    async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         # 1. dense ranking
         hits = self.qdrant_client.query_points(
             collection_name=self.collection_name,
@@ -160,7 +160,7 @@ class QdrantStore(VectorStore):
         logging.info(f'combined: {combined}')
         return {"results": combined}
 
-    def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
+    async def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
         if name is not None and name != self.collection_name:
             logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
             return None
@@ -169,7 +169,7 @@ class QdrantStore(VectorStore):
         logging.info(f'deleted collection: {self.collection_name}')
         return self.collection_name
 
-    def list_collection(self) -> list[str]:
+    async def list_collection(self) -> list[str]:
         logging.info('listing collection')
         response: CollectionsResponse = self.qdrant_client.get_collections()
         logging.info(f'returned collections: {response.collections}')
@@ -177,7 +177,7 @@ class QdrantStore(VectorStore):
         logging.info(f'found {len(existing_collections_list)} collections')
         return existing_collections_list
 
-    def hybrid_search(self, query_embedding: Sequence[float],
+    async def hybrid_search(self, query_embedding: Sequence[float],
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         from qdrant_client.http import models
 

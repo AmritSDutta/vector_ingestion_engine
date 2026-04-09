@@ -10,21 +10,21 @@ def get_reranker_model() -> TextCrossEncoder:
 
 
 class VectorStore:
-    def save(self, data: DataFrame):
+    async def save(self, data: DataFrame):
         raise NotImplementedError
 
-    def create(self, collection_name: Optional[str] = "insight_scope"):
+    async def create(self, collection_name: Optional[str] = "insight_scope"):
         raise NotImplementedError
 
-    def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
+    async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
         raise NotImplementedError
 
-    def delete_collection(self, name: str):
+    async def delete_collection(self, name: str):
         raise NotImplementedError
 
-    def list_collection(self) -> list[str]:
+    async def list_collection(self) -> list[str]:
         raise NotImplementedError
 
-    def hybrid_search(self, query_embedding: Sequence[float],
-                      n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+    async def hybrid_search(self, query_embedding: Sequence[float],
+                            n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         raise NotImplementedError
