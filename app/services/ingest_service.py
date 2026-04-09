@@ -1,10 +1,11 @@
 import logging
-import numpy as np
 import pandas as pd
 
 from app.config.config import get_settings
 from app.services.embedding.EmbeddingFactory import get_embedding_service
 from app.services.vector_store.VectoreStoreFaactory import get_vector_store
+
+logger = logging.getLogger(__name__)
 
 
 def _get_custom_embedding(texts: list[str]):
@@ -13,7 +14,7 @@ def _get_custom_embedding(texts: list[str]):
     return embedding_service.embed_batch(texts)
 
 
-def _get_vector_Store():
+def _get_vector_store():
     """Generate a Gemini embedding for a given text."""
     return get_vector_store()
 
@@ -29,13 +30,7 @@ async def ingest_and_store_embedding():
     embeddings = _get_custom_embedding(texts_to_embed)
     data["embeddings"] = embeddings
 
-    data_list = [(
-            row["ResumeID"], row["Name"], row["Category"], row["Education"],
-            row["Skills"], row["Summary"], np.array(row["embeddings"])
-        )
-        for _, row in data.iterrows()
-    ]
-    vstore = _get_vector_Store()
+    vstore = _get_vector_store()
     vstore.create()
     vstore.save(data)
-    logging.info(f'indexes built and stored in vector store')
+    logging.info(f'Successfully indexes built and stored in vector store, rows: {len(data)}')

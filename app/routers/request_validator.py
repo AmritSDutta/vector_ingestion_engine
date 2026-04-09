@@ -4,6 +4,9 @@ import re
 from fastapi import HTTPException
 from openai import OpenAI, RateLimitError, APIError, APIConnectionError
 from openai.types import ModerationCreateResponse
+
+
+logger = logging.getLogger(__name__)
 # Expanded, Docker-aware threat patterns
 MALICIOUS_PATTERNS = [
     # Dangerous Python / OS execution
@@ -84,8 +87,9 @@ def do_moderation(user_input: str):
             model="omni-moderation-latest",
             input=user_input
         )
-        logging.info(f'moderation result: {resp}')
-        if any(result.flagged for result in resp.results):
+        any_malicious_content = any(result.flagged for result in resp.results)
+        logging.info(f'moderation result, malicious content found ? {any_malicious_content}')
+        if any_malicious_content:
             raise HTTPException(status_code=403, detail="Unsupported content detected")
 
     except RateLimitError:

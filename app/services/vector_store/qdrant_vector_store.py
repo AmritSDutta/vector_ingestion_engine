@@ -9,6 +9,8 @@ from qdrant_client.http.models import models, CollectionsResponse
 from app.config.config import get_settings
 from app.services.vector_store.vector_store import VectorStore
 
+logger = logging.getLogger(__name__)
+
 
 class QdrantStore(VectorStore):
 
@@ -115,9 +117,14 @@ class QdrantStore(VectorStore):
         logging.info(f'combined: {combined}')
         return {"results": combined}
 
-    def delete_collection(self, name: str):
+    def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
+        if name is not None and name != self.collection_name:
+            logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
+            return None
+
         self.qdrant_client.delete_collection(self.collection_name)
         logging.info(f'deleted collection: {self.collection_name}')
+        return self.collection_name
 
     def list_collection(self) -> list[str]:
         logging.info('listing collection')
@@ -126,3 +133,7 @@ class QdrantStore(VectorStore):
         existing_collections_list = [collection.name for collection in response.collections]
         logging.info(f'found {len(existing_collections_list)} collections')
         return existing_collections_list
+
+    def hybrid_search(self, query_embedding: Sequence[float],
+                      n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+        raise NotImplementedError

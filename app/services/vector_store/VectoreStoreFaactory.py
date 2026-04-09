@@ -4,6 +4,7 @@ from app.config.config import Settings
 from app.services.vector_store.milvus_vector_store import MilvusStore
 from app.services.vector_store.qdrant_vector_store import QdrantStore
 
+logger = logging.getLogger(__name__)
 _qdrantStore: QdrantStore | None = None
 _milvusStore: MilvusStore | None = None
 

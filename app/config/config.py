@@ -61,7 +61,7 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
         logging.info("Settings Loaded")
-        print(DOTENV_PATH)
+        # print(DOTENV_PATH)
         logging.info(f"CWD: {os.getcwd()}")
-        logging.info(f"model_dump: {_settings.model_dump()}")
+        # logging.info(f"model_dump: {_settings.model_dump()}")
     return _settings

@@ -1,13 +1,9 @@
 import logging
-import os
-import tempfile
-import uuid
-from typing import List, Optional
+from typing import Optional
 
-import aiofiles
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.services.ingest_service import ingest_and_store_embedding, _get_vector_Store
+from app.services.ingest_service import ingest_and_store_embedding, _get_vector_store
 
 logger = logging.getLogger(__name__)
 ingest_router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -33,7 +29,7 @@ async def delete_collections(collection_name: Optional[str] = None) -> str:
     delete vector store
     """
     try:
-        vstore = _get_vector_Store()
+        vstore = _get_vector_store()
         response: Optional[str] = vstore.delete_collection(collection_name)
         return f'deleted collection {response if response else 'None'}'
 
