@@ -1,10 +1,11 @@
 import logging
-from typing import Sequence, Dict, Optional, Any
+from typing import Sequence, Optional, Any
 
+from fastembed import SparseTextEmbedding, LateInteractionTextEmbedding
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import models, CollectionsResponse
+from qdrant_client.http.models import models, CollectionsResponse, UpdateResult
 
 from app.config.config import get_settings
 from app.services.vector_store.vector_store import VectorStore
@@ -23,6 +24,8 @@ class QdrantStore(VectorStore):
             port=settings.QDRANT_PORT,
             api_key=settings.QDRANT_API_KEY,
         )
+        self.bm25_embedding_model = SparseTextEmbedding("Qdrant/bm25", threads=2)
+        self.late_interaction_embedding_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0", threads=4)
         self.reranker = TextCrossEncoder(model_name='jinaai/jina-reranker-v2-base-multilingual')
 
     def create(self, collection_name_overridden: Optional[str] = None):
@@ -34,14 +37,34 @@ class QdrantStore(VectorStore):
                 logging.info(f'existing collection: {effective_collection_name}')
                 return
 
+            '''
+            vectors_config=models.VectorParams(
+                                size=settings.EMBEDDING_DIM,
+                                distance=models.Distance.COSINE,
+                                on_disk=True
+                            ),
+            '''
             logging.info(f'creating collection: {effective_collection_name}')
             self.qdrant_client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=models.VectorParams(
-                    size=settings.EMBEDDING_DIM,
-                    distance=models.Distance.COSINE,
-                    on_disk=True
-                )
+                vectors_config={
+                    "genai": models.VectorParams(
+                        size=settings.EMBEDDING_DIM,
+                        distance=models.Distance.COSINE,
+                        on_disk=True
+                    ),
+                    "colbert": models.VectorParams(
+                        size=self.late_interaction_embedding_model.embedding_size,
+                        distance=models.Distance.COSINE,
+                        multivector_config=models.MultiVectorConfig(
+                            comparator=models.MultiVectorComparator.MAX_SIM,
+                        ),
+                        hnsw_config=models.HnswConfigDiff(m=0)  # Disable HNSW for reranking
+                    ),
+                },
+                sparse_vectors_config={
+                    "bm25": models.SparseVectorParams(modifier=models.Modifier.IDF)
+                }
             )
             logging.info(f'created qdrant collection: {effective_collection_name}')
 
@@ -50,37 +73,56 @@ class QdrantStore(VectorStore):
 
     def save(self, data: DataFrame):
         try:
-
             import numpy as np
-            data_list = [(
-                row["ResumeID"], row["Name"], row["Category"], row["Education"],
-                row["Skills"], row["Summary"], np.array(row["embeddings"])
-            )
-                for _, row in data.iterrows()
-            ]
+            from qdrant_client.http import models
 
-            embeddings = [item[-1] for item in data_list]
-            payload = [
-                {
-                    "ResumeID": item[0],
-                    "Name": item[1],
-                    "Category": item[2],
-                    "Education": item[3],
-                    "Skills": item[4],
-                    "Summary": item[5],
-                    "doc": item[5]
+            # 1. Generate Embeddings
+            # Ensure 'overall' text column exists and has no NaNs
+            texts = data["overall"].fillna("").tolist()
+
+            bm25_embeddings = list(self.bm25_embedding_model.embed(texts))
+            late_interaction_embeddings = list(self.late_interaction_embedding_model.embed(texts))
+            dense_embeddings = data["embeddings"].tolist()
+
+            points = []
+            for i, row in data.iterrows():
+                # 2. Convert NumPy types to Python native for JSON serialization
+                payload = {
+                    "ResumeID": int(row["ResumeID"]) if isinstance(row["ResumeID"], (np.integer, int)) else str(
+                        row["ResumeID"]),
+                    "Name": str(row["Name"]),
+                    "Category": str(row["Category"]),
+                    "Education": str(row["Education"]),
+                    "Skills": str(row["Skills"]),
+                    "Summary": str(row["Summary"]),
+                    "doc": str(row["Summary"])
                 }
-                for item in data_list
-            ]
 
-            self.qdrant_client.upload_collection(
+                # 3. Construct PointStruct with named vectors
+                points.append(models.PointStruct(
+                    id=int(i),  # Or use row["ResumeID"] if it's a valid UUID/int
+                    vector={
+                        "genai": dense_embeddings[i],
+                        "colbert": late_interaction_embeddings[i].tolist(),
+                        "bm25": models.SparseVector(
+                            indices=bm25_embeddings[i].indices.tolist(),
+                            values=bm25_embeddings[i].values.tolist()
+                        )
+                    },
+                    payload=payload
+                )
+                )
+
+            # 4. Use upsert for better handling of mixed vector types
+            result: UpdateResult = self.qdrant_client.upsert(
                 collection_name=self.collection_name,
-                vectors=[v.tolist() for v in embeddings],
-                payload=payload,
+                points=points
             )
-            logging.info(f'uploaded data to  collection: {self.collection_name}')
+            logging.info(f'Successfully uploaded {result} points to {self.collection_name}')
+
         except Exception as e:
-            logging.error(f'qdrant persistence error: {e}')
+            logging.error(f'Qdrant persistence error: {e}')
+            raise e
 
     def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         # 1. dense ranking
@@ -136,4 +178,41 @@ class QdrantStore(VectorStore):
 
     def hybrid_search(self, query_embedding: Sequence[float],
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
-        raise NotImplementedError
+        from qdrant_client.http import models
+
+        # 1. Generate sparse and multi-vector query components
+        sparse_query = next(self.bm25_embedding_model.query_embed(query))
+        colbert_query = next(self.late_interaction_embedding_model.query_embed(query))
+
+        # 2. Retrieve candidates via Prefetch and RRF Fusion
+        search_result = self.qdrant_client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[
+                models.Prefetch(query=query_embedding, using="genai", limit=n_results * 10),
+                models.Prefetch(
+                    query=models.SparseVector(
+                        indices=sparse_query.indices.tolist(),
+                        values=sparse_query.values.tolist()
+                    ),
+                    using="bm25",
+                    limit=n_results * 10
+                ),
+                models.Prefetch(query=colbert_query.tolist(), using="colbert", limit=n_results * 10),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=n_results * 10
+        )
+
+        points = search_result.points
+        if not points:
+            return {"results": []}
+
+        # 3. Apply Cross-Encoder Reranking
+        docs = [p.payload.get("doc", "") for p in points]
+        # The error indicates 'rerank' returns a list of floats
+        scores = list(self.reranker.rerank(query, docs))
+
+        # Pair scores with points and sort by the float score (index 0 of tuple)
+        scored_points = sorted(zip(scores, points), key=lambda x: x[0], reverse=True)
+
+        return {"results": [p[1].payload for p in scored_points[:n_results]]}
