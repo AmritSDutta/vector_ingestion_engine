@@ -5,7 +5,7 @@ import pandas as pd
 
 from app.config.config import get_settings
 from app.services.embedding.EmbeddingFactory import get_embedding_service
-from app.services.vector_store.VectoreStoreFaactory import get_vector_store
+from app.services.vector_store.VectorStoreFactory import get_vector_store
 
 logger = logging.getLogger(__name__)
 

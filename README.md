@@ -4,7 +4,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) pipeline for processing, st
 
 ## 🌟 Overview
 
-The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingests documents, generates high-dimensional embeddings, stores them in specialized vector databases (Qdrant or Milvus), and performs semantic searches enhanced by reranking and multi-stage retrieval strategies.
+The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingests documents, generates high-dimensional embeddings, stores them in specialized vector databases (Qdrant, Milvus, or PostgreSQL), and performs semantic searches enhanced by reranking and multi-stage retrieval strategies.
 
 ### Key Features
 - **Multi-Vector Support:** Implements dense (Gemini/Mistral), sparse (BM25), and late interaction (ColBERT) vector storage.
@@ -12,7 +12,7 @@ The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingest
   - **Qdrant:** Advanced multi-stage search (Dense + Sparse -> RRF -> ColBERT Rerank) in a single call.
   - **Milvus:** RRF-based hybrid search combining dense and BM25 vectors.
 - **Cross-Encoder Reranking:** Uses `jina-reranker-v2-base-multilingual` for precision re-scoring.
-- **Flexible Vector Stores:** Pluggable support for **Qdrant** and **Milvus**.
+- **Flexible Vector Stores:** Pluggable support for **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)**.
 - **RAG Evaluation:** Automated evaluation of faithfulness and context relevancy using LlamaIndex and OpenAI.
 - **Security First:** Robust request validation with pattern-based threat detection and OpenAI moderation.
 - **Modern Stack:** Built with FastAPI (Backend) and Streamlit (Frontend).
