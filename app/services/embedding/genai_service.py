@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence, List
+from typing import Sequence, List, Any
 
 from google import genai
 
@@ -41,7 +41,7 @@ class GenAIEmbeddingService(EmbeddingService):
             batch_size: int = 32,
             task_type: str = None,
             output_dimensionality: int = 1024,
-    ):
+    ) -> list[Any]:
         """Batch embedding for large text collections."""
 
         texts = list(texts)
