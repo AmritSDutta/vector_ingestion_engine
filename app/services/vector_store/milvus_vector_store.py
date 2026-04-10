@@ -5,7 +5,7 @@ from pandas import DataFrame
 from pymilvus import MilvusClient, DataType, Function, FunctionType, MilvusException, AnnSearchRequest
 
 from app.config.config import get_settings
-from app.services.vector_store.vector_store import VectorStore, get_reranker_model
+from app.services.vector_store.vector_store import VectorStore, get_reranker_model, validate_collection_name
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ class MilvusStore(VectorStore):
             secure=True
         )
         logging.info(f"Connected to DB: {settings.MILVUS_URI} successfully")
+        validate_collection_name(self.collection_name)
 
         # Check if the collection exists
         check_collection = self.client.has_collection(self.collection_name)
@@ -31,9 +32,10 @@ class MilvusStore(VectorStore):
             logging.info(f"Existing collection {self.collection_name} confirmed")
         self.reranker = get_reranker_model()
 
-    async def create(self, collection_name_overridden: Optional[str] = None):
+    async def create(self):
         settings = get_settings()
         coll_name = self.collection_name
+        validate_collection_name(coll_name)
 
         logging.info(f"Creating Milvus collection: {coll_name}")
         if self.client.has_collection(collection_name=coll_name):
@@ -141,9 +143,10 @@ class MilvusStore(VectorStore):
         combined.sort(key=lambda x: x["final_score"], reverse=True)
         return {"results": combined}
 
-    async def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
-        if name is not None and name != self.collection_name:
-            logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
+    async def delete_collection(self) -> Optional[str]:
+        validate_collection_name(self.collection_name)
+        if self.collection_name is None:
+            logging.info(f"collection name is None ")
             return None
 
         check_collection = self.client.has_collection(self.collection_name)

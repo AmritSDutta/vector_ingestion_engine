@@ -2,13 +2,12 @@ import logging
 from typing import Sequence, Optional, Any
 
 from fastembed import SparseTextEmbedding, LateInteractionTextEmbedding
-from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import models, CollectionsResponse, UpdateResult
 
 from app.config.config import get_settings
-from app.services.vector_store.vector_store import VectorStore, get_reranker_model
+from app.services.vector_store.vector_store import VectorStore, get_reranker_model, validate_collection_name
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +17,7 @@ class QdrantStore(VectorStore):
     def __init__(self):
         settings = get_settings()
         self.collection_name = settings.COLLECTION_NAME
+        validate_collection_name(self.collection_name)
 
         self.qdrant_client = QdrantClient(
             url=settings.QDRANT_HOST,
@@ -28,22 +28,16 @@ class QdrantStore(VectorStore):
         self.late_interaction_embedding_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0", threads=4)
         self.reranker = get_reranker_model()
 
-    async def create(self, collection_name_overridden: Optional[str] = None):
+    async def create(self):
         settings = get_settings()
         effective_collection_name = self.collection_name
+        validate_collection_name(effective_collection_name)
 
         try:
             if self.qdrant_client.collection_exists(effective_collection_name):
                 logging.info(f'existing collection: {effective_collection_name}')
                 return
 
-            '''
-            vectors_config=models.VectorParams(
-                                size=settings.EMBEDDING_DIM,
-                                distance=models.Distance.COSINE,
-                                on_disk=True
-                            ),
-            '''
             logging.info(f'creating collection: {effective_collection_name}')
             self.qdrant_client.create_collection(
                 collection_name=self.collection_name,
@@ -157,12 +151,13 @@ class QdrantStore(VectorStore):
 
         # 4. Sort by final score descending
         combined.sort(key=lambda x: x["final_score"], reverse=True)
-        logging.info(f'combined: {combined}')
+        logging.info(f'{len(combined)} combined results')
         return {"results": combined}
 
-    async def delete_collection(self, name: Optional[str] = None) -> Optional[str]:
-        if name is not None and name != self.collection_name:
-            logging.info(f"collection name: {self.collection_name}, mismatched with : {name} ")
+    async def delete_collection(self) -> Optional[str]:
+        validate_collection_name(self.collection_name)
+        if self.collection_name is None:
+            logging.info(f"collection name is None ")
             return None
 
         self.qdrant_client.delete_collection(self.collection_name)
@@ -209,5 +204,5 @@ class QdrantStore(VectorStore):
             using="colbert",
             limit=n_results
         )
-
+        logging.info(f'query results: {len(response.points)}')
         return {"results": [p.payload for p in response.points]}

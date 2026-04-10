@@ -9,10 +9,12 @@ from app.services.vector_store.VectoreStoreFaactory import get_vector_store
 logger = logging.getLogger(__name__)
 
 
-def _get_custom_embedding(texts: list[str]):
+async def _get_custom_embedding(texts: list[str]):
     """Generate a Gemini embedding for a given text."""
+    import asyncio
     embedding_service = get_embedding_service()
-    return embedding_service.embed_batch(texts)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, embedding_service.embed_batch, texts)
 
 
 def _get_vector_store():
@@ -28,7 +30,7 @@ async def ingest_and_store_embedding():
     logging.info(f"Total rows selected from file: {len(data)}")
 
     texts_to_embed: list[str] = data["overall"].tolist()
-    embeddings = _get_custom_embedding(texts_to_embed)
+    embeddings = await _get_custom_embedding(texts_to_embed)
     data["embeddings"] = embeddings
 
     vstore = _get_vector_store()

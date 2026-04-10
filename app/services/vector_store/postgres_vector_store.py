@@ -2,10 +2,10 @@ import logging
 from typing import Optional, Sequence, Dict, Any
 
 import asyncpg
-from pandas import DataFrame
 
+from pandas import DataFrame
 from app.config.config import get_settings
-from app.services.vector_store.vector_store import VectorStore, get_reranker_model
+from app.services.vector_store.vector_store import VectorStore, get_reranker_model, validate_collection_name
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +20,14 @@ class PGVectorStore(VectorStore):
     async def _get_connection(self):
         return await asyncpg.connect(self.conn_str)
 
-    async def create(self, collection_name_overridden: Optional[str] = None):
+    async def create(self):
         """Initializes the database schema if it doesn't exist."""
-        coll_name = collection_name_overridden or self.collection_name
+        coll_name = self.collection_name
+        validate_collection_name(coll_name)
         logger.info(f"Initializing Postgres collection: {coll_name}")
         
         conn = await self._get_connection()
+
         try:
             # Enable extensions
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -220,12 +222,14 @@ class PGVectorStore(VectorStore):
         finally:
             await conn.close()
 
-    async def delete_collection(self, name: str) -> Optional[str]:
+    async def delete_collection(self) -> Optional[str]:
         """Drops the table."""
+        coll_name = self.collection_name
+        validate_collection_name(coll_name)
         conn = await self._get_connection()
         try:
-            await conn.execute(f"DROP TABLE IF EXISTS {name or self.collection_name};")
-            return name or self.collection_name
+            await conn.execute(f"DROP TABLE IF EXISTS {coll_name};")
+            return coll_name
         except Exception as e:
             logger.error(f"Postgres delete error: {e}")
             return None
