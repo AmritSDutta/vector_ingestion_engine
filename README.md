@@ -4,18 +4,19 @@ A sophisticated Retrieval-Augmented Generation (RAG) pipeline for processing, st
 
 ## 🌟 Overview
 
-The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingests documents, generates high-dimensional embeddings, stores them in specialized vector databases (Qdrant, Milvus, or PostgreSQL), and performs semantic searches enhanced by reranking and multi-stage retrieval strategies.
+The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingests documents asynchronously, generates high-dimensional embeddings, stores them in specialized vector databases (Qdrant, Milvus, or PostgreSQL), and performs semantic searches enhanced by reranking and multi-stage retrieval strategies.
 
 ### Key Features
+- **Asynchronous Ingestion:** Uses **Celery** and **Redis** for robust, non-blocking document processing.
 - **Multi-Vector Support:** Implements dense (Gemini/Mistral), sparse (BM25), and late interaction (ColBERT) vector storage.
 - **Hybrid Search:** 
   - **Qdrant:** Advanced multi-stage search (Dense + Sparse -> RRF -> ColBERT Rerank) in a single call.
   - **Milvus:** RRF-based hybrid search combining dense and BM25 vectors.
 - **Cross-Encoder Reranking:** Uses `jina-reranker-v2-base-multilingual` for precision re-scoring.
 - **Flexible Vector Stores:** Pluggable support for **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)**.
-- **RAG Evaluation:** Automated evaluation of faithfulness and context relevancy using LlamaIndex and OpenAI.
+- **RAG Evaluation:** Automated evaluation of faithfulness and context relevancy using OpenAI `gpt-4o-mini`.
 - **Security First:** Robust request validation with pattern-based threat detection and OpenAI moderation.
-- **Modern Stack:** Built with FastAPI (Backend) and Streamlit (Frontend).
+- **Modern Stack:** Built with FastAPI (Backend), Streamlit (Frontend), and Celery (Tasks).
 
 ## 🛠️ System Architecture
 
@@ -43,6 +44,11 @@ graph TD
         end
     end
 
+    subgraph AsyncTasks [Task Queue]
+        CW[app/celery_worker.py]
+        RD[(Redis)]
+    end
+
     subgraph "Vector Stores (Pluggable)"
         QD[(Qdrant)]
         MV[(Milvus)]
@@ -52,7 +58,9 @@ graph TD
     UI <--> API
     API --> Router
     Router --> IR & QR & MR
-    IR --> IS
+    IR -- Trigger --> CW
+    CW <--> RD
+    CW --> IS
     QR --> QS
     MR --> QS
     
@@ -69,6 +77,7 @@ graph TD
 The project is organized into a clean, service-oriented architecture:
 
 *   **`app/ui.py`**: The **InsightScope** dashboard for file uploads, collection management, and semantic querying.
+*   **`app/celery_worker.py`**: Celery worker configuration for handling background ingestion tasks.
 *   **`app/services/`**: The core logic layer.
     *   **`ingest_service.py`**: Handles document loading, text chunking, and embedding generation.
     *   **`query_service.py`**: Orchestrates multi-stage retrieval (Dense + Sparse + Reranking).
@@ -78,8 +87,85 @@ The project is organized into a clean, service-oriented architecture:
 
 ### 🚀 Data Flow (Ingestion & Query)
 
-1.  **Ingestion**: `Document -> Chunking -> Embedding (Gemini/Mistral) -> Vector Store (Named Vectors)`
+1.  **Ingestion (Async)**: `Upload -> Celery Task -> Document -> Chunking -> Embedding -> Vector Store`
 2.  **Query**: `User Query -> Embedding -> Vector Search -> Hybrid Fusion (RRF) -> Reranking (Jina) -> LLM Answer`
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- **Redis** (for Celery task queue).
+- **Qdrant** (port 6333), **Milvus**, or **PostgreSQL** instance.
+- API Keys: `GOOGLE_API_KEY`, `OPENAI_API_KEY` (for evaluation & moderation).
+
+### Installation
+1. Clone the repository.
+2. Create a `.env` file in the root:
+   ```env
+   GOOGLE_API_KEY=your_gemini_key
+   OPENAI_API_KEY=your_openai_key
+   VECTOR_STORE=qdrant
+   QDRANT_HOST=localhost
+   QDRANT_PORT=6333
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Running the Application
+
+To run the full system, follow these steps in order:
+
+#### 1. Start Redis
+The Celery task queue requires Redis as a broker.
+```bash
+# Using Docker (Recommended)
+docker run -d -p 6379:6379 redis
+```
+
+#### 2. Start Celery Worker
+Launch the worker to handle background ingestion tasks. Ensure you are in the project root directory.
+
+**For Windows (Required):**
+```bash
+celery -A app.celery_worker worker --loglevel=info -P solo
+```
+
+**For Linux/Mac:**
+```bash
+celery -A app.celery_worker worker --loglevel=info
+```
+
+#### 3. Start the Backend (FastAPI)
+The API manages the vector store and orchestrates tasks.
+```bash
+python app/main.py
+```
+
+#### 4. Start the Frontend (Streamlit)
+The dashboard provides a visual interface for uploading and searching.
+```bash
+streamlit run app/ui.py
+```
+
+### Environment Configuration
+Ensure your `.env` file contains the `REDIS_URL`:
+```env
+REDIS_URL=redis://localhost:6379/0
+# ... other variables (GOOGLE_API_KEY, etc.)
+```
+
+### Testing
+```bash
+pytest
+```
+
+## 📝 Current Roadmap & TODOs
+- [x] Implement asynchronous ingestion using Celery.
+- [ ] Implement Airflow-based multi-store distribution (see `AIRFLOW_MULTI_STORE_IMPLEMENTATION_PLAN.md`).
+- [ ] Integrate advanced PDF/OCR parsing in `app/rag/reader.py`.
+- [ ] Add more RAG evaluators (e.g., Answer Relevancy).
 
 ### SQL
 ```

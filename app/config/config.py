@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = 'some_password'
     POSTGRES_BATCH_SIZE: int = 100
 
+    REDIS_URL: str = "redis://localhost:6379/0"
+
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
 
     @property

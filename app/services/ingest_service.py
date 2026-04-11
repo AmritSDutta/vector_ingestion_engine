@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -23,18 +23,28 @@ def _get_vector_store():
     return get_vector_store()
 
 
-async def ingest_and_store_embedding():
+async def ingest_and_store_embedding(progress_callback: Callable[[str], None] = None) -> dict:
     logging.info(f'uploaded files stored in : {get_settings().data_file_path}')
+    if progress_callback:
+        progress_callback('Loading Data')
+
     pd_data = pd.read_json(get_settings().data_file_path)
-    data = pd_data.iloc[:-1].copy()
+    data = pd_data.iloc[0:3].copy()
     logging.info(f"Processing rows {pd_data.columns} into DB")
     logging.info(f"Total rows selected from file: {len(data)}")
 
     texts_to_embed: list[str] = data["overall"].tolist()
+    if progress_callback:
+        progress_callback('Embedding started')
+
     embeddings: list[Any] = await _get_custom_embedding(texts_to_embed)
     data["embeddings"] = embeddings
+
+    if progress_callback:
+        progress_callback('Saving to Vector Store')
 
     vstore = _get_vector_store()
     await vstore.create()
     await vstore.save(data)
     logging.info(f'Successfully indexes built and stored in vector store, rows: {len(data)}')
+    return {"status": "success", "rows": len(data)}
