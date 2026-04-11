@@ -1,22 +1,30 @@
 # 🚀 Vector Ingestion Engine
 
-A sophisticated Retrieval-Augmented Generation (RAG) pipeline for processing, storing, and querying document data (specialized for resumes) using advanced embedding techniques, hybrid search, and reranking.
+A high-performance, production-ready Retrieval-Augmented Generation (RAG) pipeline designed for complex document ingestion, semantic retrieval, and multi-stage search orchestration. This engine is specialized for processing resumes and leverages advanced embedding techniques, hybrid search (Dense + Sparse), and cross-encoder reranking.
 
-## 🌟 Overview
+---
 
-The **Vector Ingestion Engine** provides a full-featured RAG pipeline. It ingests documents asynchronously, generates high-dimensional embeddings, stores them in specialized vector databases (Qdrant, Milvus, or PostgreSQL), and performs semantic searches enhanced by reranking and multi-stage retrieval strategies.
+## 🌟 Key Features
 
-### Key Features
-- **Asynchronous Ingestion:** Uses **Celery** and **Redis** for robust, non-blocking document processing.
-- **Multi-Vector Support:** Implements dense (Gemini/Mistral), sparse (BM25), and late interaction (ColBERT) vector storage.
-- **Hybrid Search:** 
-  - **Qdrant:** Advanced multi-stage search (Dense + Sparse -> RRF -> ColBERT Rerank) in a single call.
-  - **Milvus:** RRF-based hybrid search combining dense and BM25 vectors.
-- **Cross-Encoder Reranking:** Uses `jina-reranker-v2-base-multilingual` for precision re-scoring.
-- **Flexible Vector Stores:** Pluggable support for **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)**.
-- **RAG Evaluation:** Automated evaluation of faithfulness and context relevancy using OpenAI `gpt-4o-mini`.
-- **Security First:** Robust request validation with pattern-based threat detection and OpenAI moderation.
-- **Modern Stack:** Built with FastAPI (Backend), Streamlit (Frontend), and Celery (Tasks).
+### 1. Asynchronous Ingestion Pipeline
+*   **Non-Blocking Workflow:** Uses **Celery** and **Redis** to handle heavy document processing, chunking, and embedding generation in the background.
+*   **Status Polling:** Real-time progress updates (Loading -> Embedding -> Saving) via a background poller in the FastAPI console.
+
+### 2. Advanced Retrieval Strategies
+*   **Hybrid Search:** Combines Dense vectors (Gemini/Mistral) with Sparse vectors (BM25) using **Reciprocal Rank Fusion (RRF)** for superior accuracy.
+*   **Late Interaction:** Support for ColBERT vectors via FastEmbed.
+*   **Cross-Encoder Reranking:** Precision re-scoring using `jina-reranker-v2-base-multilingual`.
+
+### 3. Pluggable Vector Infrastructure
+*   **Multi-Store Support:** Seamlessly switch between **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)** via the Factory pattern.
+*   **Optimized PG Schema:** Native Full-Text Search (`tsvector`) and high-performance array searching (`TEXT[]`) for skills matching.
+
+### 4. Enterprise-Grade Security & Eval
+*   **Rate Limiting:** Protects endpoints using `fastapi-limiter`.
+*   **RAG Evaluation:** Automated faithfulness and context relevancy scoring using OpenAI `gpt-4o-mini`.
+*   **Input Sanitization:** Pattern-based threat detection for all user queries.
+
+---
 
 ## 🛠️ System Architecture
 
@@ -33,7 +41,6 @@ graph TD
         subgraph Routers
             IR[routes_ingest.py]
             QR[routes_query.py]
-            MR[matching_doc_router.py]
         end
         
         subgraph Services
@@ -57,12 +64,11 @@ graph TD
 
     UI <--> API
     API --> Router
-    Router --> IR & QR & MR
+    Router --> IR & QR
     IR -- Trigger --> CW
     CW <--> RD
     CW --> IS
     QR --> QS
-    MR --> QS
     
     IS --> EF & VF
     QS --> EF & VF
@@ -72,216 +78,115 @@ graph TD
     VF --> PG | settings.VECTOR_STORE='postgres' | PG
 ```
 
-### 📂 Project Structure Overview
+---
 
-The project is organized into a clean, service-oriented architecture:
+## 🚀 Execution Guide: Step-by-Step
 
-*   **`app/ui.py`**: The **InsightScope** dashboard for file uploads, collection management, and semantic querying.
-*   **`app/celery_worker.py`**: Celery worker configuration for handling background ingestion tasks.
-*   **`app/services/`**: The core logic layer.
-    *   **`ingest_service.py`**: Handles document loading, text chunking, and embedding generation.
-    *   **`query_service.py`**: Orchestrates multi-stage retrieval (Dense + Sparse + Reranking).
-    *   **`vector_store/`**: Implements the Factory pattern to switch between Qdrant, Milvus, and Postgres.
-*   **`app/routers/`**: Defines the RESTful API contract for the frontend and external clients.
-*   **`app/config/`**: Centralized configuration using Pydantic `Settings` for environment variable management.
+Follow these steps in the exact order to launch the full distributed system.
 
-### 🚀 Data Flow (Ingestion & Query)
+### 1. Prerequisites & Environment
+*   **Python:** 3.10+
+*   **Redis:** Required for Celery.
+*   **Vector DB:** An instance of Qdrant, Milvus, or Postgres (with pgvector).
 
-1.  **Ingestion (Async)**: `Upload -> Celery Task -> Document -> Chunking -> Embedding -> Vector Store`
-2.  **Query**: `User Query -> Embedding -> Vector Search -> Hybrid Fusion (RRF) -> Reranking (Jina) -> LLM Answer`
+**Setup `.env`:**
+Create a `.env` file in the root directory:
+```env
+# API Keys
+GOOGLE_API_KEY=your_gemini_key
+OPENAI_API_KEY=your_openai_key
 
-## 🚀 Getting Started
+# Infrastructure
+REDIS_URL=redis://localhost:6379/0
+VECTOR_STORE=qdrant  # Options: qdrant, milvus, postgres
 
-### Prerequisites
-- Python 3.10+
-- **Redis** (for Celery task queue).
-- **Qdrant** (port 6333), **Milvus**, or **PostgreSQL** instance.
-- API Keys: `GOOGLE_API_KEY`, `OPENAI_API_KEY` (for evaluation & moderation).
+# Vector DB Config
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+DB_DSN=postgres://user:pass@localhost/resume_vector_db
+```
 
-### Installation
-1. Clone the repository.
-2. Create a `.env` file in the root:
-   ```env
-   GOOGLE_API_KEY=your_gemini_key
-   OPENAI_API_KEY=your_openai_key
-   VECTOR_STORE=qdrant
-   QDRANT_HOST=localhost
-   QDRANT_PORT=6333
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Running the Application
-
-To run the full system, follow these steps in order:
-
-#### 1. Start Redis
-The Celery task queue requires Redis as a broker.
+**Install Dependencies:**
 ```bash
-# Using Docker (Recommended)
+pip install -r requirements.txt
+```
+
+### 2. Start the Distributed Components
+
+#### Step A: Start Redis (The Message Broker)
+```bash
+# Recommended: Using Docker
 docker run -d -p 6379:6379 redis
 ```
 
-#### 2. Start Celery Worker
-Launch the worker to handle background ingestion tasks. Ensure you are in the project root directory.
+#### Step B: Start Celery Worker (The Task Processor)
+Open a new terminal and run:
+*   **Windows (Required):**
+    ```bash
+    celery -A app.celery_worker worker --loglevel=info -P solo
+    ```
+*   **Linux/Mac:**
+    ```bash
+    celery -A app.celery_worker worker --loglevel=info
+    ```
 
-**For Windows (Required):**
-```bash
-celery -A app.celery_worker worker --loglevel=info -P solo
-```
-
-**For Linux/Mac:**
-```bash
-celery -A app.celery_worker worker --loglevel=info
-```
-
-#### 3. Start the Backend (FastAPI)
-The API manages the vector store and orchestrates tasks.
+#### Step C: Start FastAPI Backend (The API)
+Open a new terminal and run:
 ```bash
 python app/main.py
 ```
 
-#### 4. Start the Frontend (Streamlit)
-The dashboard provides a visual interface for uploading and searching.
+#### Step D: Start Streamlit Frontend (The UI)
+Open a new terminal and run:
 ```bash
 streamlit run app/ui.py
 ```
 
-### Environment Configuration
-Ensure your `.env` file contains the `REDIS_URL`:
-```env
-REDIS_URL=redis://localhost:6379/0
-# ... other variables (GOOGLE_API_KEY, etc.)
-```
+---
 
-### Testing
-```bash
-pytest
-```
+## 📂 Project Structure
 
-## 📝 Current Roadmap & TODOs
-- [x] Implement asynchronous ingestion using Celery.
-- [ ] Implement Airflow-based multi-store distribution (see `AIRFLOW_MULTI_STORE_IMPLEMENTATION_PLAN.md`).
-- [ ] Integrate advanced PDF/OCR parsing in `app/rag/reader.py`.
-- [ ] Add more RAG evaluators (e.g., Answer Relevancy).
+*   **`app/main.py`**: Entry point for the FastAPI application.
+*   **`app/celery_worker.py`**: Singleton Celery instance and worker config.
+*   **`app/celery_task.py`**: Celery task wrappers for background execution.
+*   **`app/services/`**: Core logic (Ingestion, Querying, Embedding/Vector Factories).
+*   **`app/routers/`**: REST API endpoints with rate limiting and background polling.
+*   **`app/ui.py`**: Streamlit-based InsightScope dashboard.
 
-### SQL
-```
--- 1. Setup Extensions
+---
+
+## 📝 SQL Schema (For PostgreSQL/pgvector)
+
+If using the `postgres` vector store, execute the following to set up your schema:
+
+```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Schema Definition
 CREATE TABLE IF NOT EXISTS resume_details (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     resume_id TEXT UNIQUE,
     name TEXT,
     category TEXT,
-    education TEXT,
     skills TEXT[],
-    summary TEXT,
     overall TEXT,
-    embedding VECTOR(1536), -- Dimension should match your embedding model
-    fts_vector tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', coalesce(overall, ''))
-    ) STORED
+    embedding VECTOR(1024), -- Dimension for Gemini
+    fts_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(overall, ''))) STORED
 );
 
--- 3. Indexing
--- HNSW index for high-performance vector similarity search
-CREATE INDEX IF NOT EXISTS idx_resume_details_embedding_hnsw 
-ON resume_details USING hnsw (embedding vector_cosine_ops);
-
--- GIN indexes for Full Text Search and Array lookups
-CREATE INDEX IF NOT EXISTS idx_resume_details_fts_gin ON resume_details USING gin (fts_vector);
-CREATE INDEX IF NOT EXISTS idx_resume_details_skills_gin ON resume_details USING gin (skills);
-
--- 4. Operations (Reference Implementation)
-
--- Upsert: Inserts or updates existing resume records
--- Parameters: $1: resume_id, $2: name, $3: category, $4: education, $5: skills, $6: summary, $7: overall, $8: embedding
-INSERT INTO resume_details 
-(resume_id, name, category, education, skills, summary, overall, embedding)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)
-ON CONFLICT (resume_id) DO UPDATE SET
-    embedding = EXCLUDED.embedding,
-    overall = EXCLUDED.overall,
-    summary = EXCLUDED.summary,
-    skills = EXCLUDED.skills;
-
--- Semantic Search: Finds top-K results by cosine distance
--- Parameters: $1: query_embedding, $2: limit
-SELECT resume_id, name, category, education, skills, summary, overall,
-       (embedding <=> $1::vector) as distance
-FROM resume_details
-ORDER BY distance ASC
-LIMIT $2;
-
--- Hybrid Search: Combines Vector Search and Full Text Search using RRF
--- Parameters: $1: query_embedding, $2: limit, $3: text_query
-WITH vector_search AS (
-    SELECT resume_id, row_number() OVER (ORDER BY embedding <=> $1::vector) as rank
-    FROM resume_details
-    ORDER BY embedding <=> $1::vector
-    LIMIT $2 * 4
-),
-text_search AS (
-    SELECT resume_id, row_number() OVER (ORDER BY ts_rank(fts_vector, websearch_to_tsquery('english', $3)) DESC) as rank
-    FROM resume_details
-    WHERE fts_vector @@ websearch_to_tsquery('english', $3)
-    LIMIT $2 * 4
-)
-SELECT 
-    r.id, r.resume_id, r.name, r.category, r.education, r.skills, r.summary,
-    (COALESCE(1.0 / (60 + vs.rank), 0.0) + COALESCE(1.0 / (60 + ts.rank), 0.0)) as rrf_score
-FROM vector_search vs
-FULL OUTER JOIN text_search ts ON vs.resume_id = ts.resume_id
-JOIN resume_details r ON r.resume_id = COALESCE(vs.resume_id, ts.resume_id)
-ORDER BY rrf_score DESC
-LIMIT $2;
+CREATE INDEX IF NOT EXISTS idx_resume_hnsw ON resume_details USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_resume_fts ON resume_details USING gin (fts_vector);
+CREATE INDEX IF NOT EXISTS idx_resume_skills ON resume_details USING gin (skills);
 ```
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
-- Python 3.10+
-- **Qdrant** (port 6333) or **Milvus** instance.
-- API Keys: `GOOGLE_API_KEY`, `OPENAI_API_KEY` (for evaluation & moderation).
-
-### Installation
-1. Clone the repository.
-2. Create a `.env` file in the root:
-   ```env
-   GOOGLE_API_KEY=your_gemini_key
-   OPENAI_API_KEY=your_openai_key
-   QDRANT_HOST=localhost
-   QDRANT_PORT=6333
-   VECTOR_STORE_TYPE=qdrant
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Running the Application
-
-#### 1. Start the Backend (FastAPI)
-```bash
-python app/main.py
-```
-
-#### 2. Start the Frontend (Streamlit)
-```bash
-streamlit run app/ui.py
-```
-
-### Testing
+## 🧪 Testing
+Run the comprehensive test suite to verify ingestion and retrieval:
 ```bash
 pytest
 ```
 
-## 📝 Current Roadmap & TODOs
-- [ ] Implement robust multi-file upload processing in `routes_ingest.py`.
-- [ ] Integrate advanced PDF/OCR parsing in `app/rag/reader.py`.
-- [ ] Add more RAG evaluators (e.g., Answer Relevancy).
+## 🛤️ Future Enhancements
+- [ ] **Apache Airflow Integration:** Multi-store distribution and embedding caching (Plan in `AIRFLOW_MULTI_STORE_IMPLEMENTATION_PLAN.md`).
+- [ ] **Advanced OCR:** Integration for complex PDF parsing.
+- [ ] **OAuth2 Integration:** Secure API access.
