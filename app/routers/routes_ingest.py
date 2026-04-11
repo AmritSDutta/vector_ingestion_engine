@@ -6,10 +6,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel
 from pyrate_limiter import Limiter, Rate, Duration
-
 from app.celery_worker import celery_app
-from app.celery_task import ingest_task_wrapper
-from app.services.ingest_service import _get_vector_store
+from app.celery_task import ingest_task_wrapper, ingest_all_db_task_wrapper
+from app.services.vector_store.VectorStoreFactory import get_vector_store
 
 logger = logging.getLogger(__name__)
 ingest_router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -63,7 +62,7 @@ async def delete_collections(collection_name: Optional[str] = None) -> str:
     delete vector store
     """
     try:
-        vstore = _get_vector_store()
+        vstore = get_vector_store()
         response: Optional[str] = await vstore.delete_collection(collection_name)
         return f'deleted collection {response if response else "None"}'
 
@@ -79,7 +78,7 @@ async def list_collections() -> list[str]:
     list collections from vector store
     """
     try:
-        vstore = _get_vector_store()
+        vstore = get_vector_store()
         return await vstore.list_collection()
 
     except Exception as exc:
@@ -106,3 +105,25 @@ async def _poll_task_status(task_id: str):
             logger.info(f"[Task Status reporter]: Task {task_id} has finished with status: {status}")
             break
         await asyncio.sleep(5)
+
+
+@ingest_router.post("/upload_to_all_database", response_model=dict,
+                    dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(1, Duration.MINUTE * 30))))])
+async def upload_data_to_all() -> dict[str, str]:
+    """
+    Accept multiple files, store them in a per-request temporary directory,
+    run ingestion, and automatically clean up.
+    """
+    try:
+        logger.info("Received request to upload files and start ingestion to all DB.")
+        task = ingest_all_db_task_wrapper.delay()
+        logger.info(f"Ingestion task triggered successfully with task_id: {task.id}")
+
+        # Trigger the background poller
+        asyncio.create_task(_poll_task_status(task.id))
+
+        return {"message": "uploading started to all DB", "task_id": task.id}
+
+    except Exception as exc:
+        logger.error(f"Error triggering file upload and ingestion: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))

@@ -87,9 +87,11 @@ class QdrantStore(VectorStore):
                     "Name": str(row["Name"]),
                     "Category": str(row["Category"]),
                     "Education": str(row["Education"]),
-                    "Skills": str(row["Skills"]),
+                    "Skills": [s.strip() for s in row["Skills"].split(",")],
                     "Summary": str(row["Summary"]),
-                    "doc": str(row["Summary"])
+                    "doc": str(row["Summary"]),
+                    "Phone": str(row["Phone"]),
+                    "Location": str(row["Location"])
                 }
 
                 # 3. Construct PointStruct with named vectors

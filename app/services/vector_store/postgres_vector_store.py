@@ -25,13 +25,13 @@ class PGVectorStore(VectorStore):
         coll_name = self.collection_name
         validate_collection_name(coll_name)
         logger.info(f"Initializing Postgres collection: {coll_name}")
-        
+
         conn = await self._get_connection()
 
         try:
             # Enable extensions
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-            
+
             # Create Table
             await conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS {coll_name} (
@@ -42,6 +42,8 @@ class PGVectorStore(VectorStore):
                     education TEXT,
                     skills TEXT[],
                     summary TEXT,
+                    phone TEXT NULL,
+                    location TEXT NULL,
                     overall TEXT,
                     embedding VECTOR({get_settings().EMBEDDING_DIM}),
                     fts_vector tsvector GENERATED ALWAYS AS (
@@ -49,12 +51,15 @@ class PGVectorStore(VectorStore):
                     ) STORED
                 );
             """)
-            
+
             # Create Indexes
-            await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_embedding_hnsw ON {coll_name} USING hnsw (embedding vector_cosine_ops);")
-            await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_fts_gin ON {coll_name} USING gin (fts_vector);")
-            await conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_skills_gin ON {coll_name} USING gin (skills);")
-            
+            await conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_embedding_hnsw ON {coll_name} USING hnsw (embedding vector_cosine_ops);")
+            await conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_fts_gin ON {coll_name} USING gin (fts_vector);")
+            await conn.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_skills_gin ON {coll_name} USING gin (skills);")
+
             logger.info(f"Postgres collection {coll_name} initialized successfully.")
         except Exception as e:
             logger.error(f"Postgres initialization error: {e}")
@@ -78,15 +83,15 @@ class PGVectorStore(VectorStore):
                     skills = []
 
                 overall_text = row.get("overall", "")
-                
+
                 # Convert embedding to list of floats for asyncpg
                 emb = row["embeddings"]
                 if hasattr(emb, "tolist"):
                     emb = emb.tolist()
-                
+
                 batch_data.append((
                     str(row.get("ResumeID")), row.get("Name"), row.get("Category"),
-                    row.get("Education"), skills, row.get("Summary"),
+                    row.get("Education"), skills, row.get("Summary"), row.get("Phone"), row.get("Location"),
                     overall_text, emb
                 ))
 
@@ -110,11 +115,10 @@ class PGVectorStore(VectorStore):
         formatted_batch = [
             (*item[:-1], str(item[-1])) for item in batch
         ]
-        
         query = f"""
             INSERT INTO {self.collection_name} 
-            (resume_id, name, category, education, skills, summary, overall, embedding)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)
+            (resume_id, name, category, education, skills, summary, phone, location, overall, embedding)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector)
             ON CONFLICT (resume_id) DO UPDATE SET
                 embedding = EXCLUDED.embedding,
                 overall = EXCLUDED.overall,
@@ -136,7 +140,7 @@ class PGVectorStore(VectorStore):
 
             rows = await conn.fetch(
                 f"""
-                SELECT resume_id, name, category, education, skills, summary, overall,
+                SELECT resume_id, name, category, education, skills, summary, phone, location,overall,
                        (embedding <=> $1::vector) as distance
                 FROM {self.collection_name}
                 ORDER BY distance ASC
@@ -144,7 +148,7 @@ class PGVectorStore(VectorStore):
                 """,
                 emb_str, n_results
             )
-            
+
             if not rows:
                 return {"results": []}
 
@@ -157,7 +161,7 @@ class PGVectorStore(VectorStore):
                 row = dict(row_data)
                 distance = row.pop("distance")
                 row.pop("overall", None)  # Remove large overall text from response
-                
+
                 dense_score = 1.0 - float(distance)
                 combined_score = dense_score + float(r_score)
                 results.append({
@@ -176,7 +180,7 @@ class PGVectorStore(VectorStore):
             await conn.close()
 
     async def hybrid_search(self, query_embedding: Sequence[float],
-                      n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+                            n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         """Hybrid Search using Reciprocal Rank Fusion (RRF)."""
         if hasattr(query_embedding, "tolist"):
             emb_str = str(query_embedding.tolist())

@@ -101,8 +101,11 @@ class MilvusStore(VectorStore):
                     "Name": row["Name"],
                     "Category": row["Category"],
                     "Education": row["Education"],
-                    "Skills": row["Skills"],
-                    "doc": row["Summary"]
+                    "Skills": [s.strip() for s in row["Skills"].split(",")],
+                    "doc": row["Summary"],
+                    "Phone": row["Phone"],
+                    "Location": row["Location"]
+
                 }
                 insert_data.append(record)
 
@@ -160,7 +163,7 @@ class MilvusStore(VectorStore):
         return self.client.list_collections()
 
     async def hybrid_search(self, query_embedding: Sequence[float],
-                      n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+                            n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         logging.info(f"Hybrid search with: {query}")
         # text semantic search (dense)
         search_param_1 = {
@@ -194,7 +197,7 @@ class MilvusStore(VectorStore):
             collection_name=self.collection_name,
             reqs=reqs,
             ranker=ranker,
-            output_fields=["ResumeID", "Name", "Category", "Education", "Skills", "Summary", "doc"],
+            output_fields=["ResumeID", "Name", "Category", "Education", "Skills", "Summary", "doc", "Phone","Location"],
             limit=n_results
         )
 
@@ -210,6 +213,8 @@ class MilvusStore(VectorStore):
                     "Education": hit.entity.get("Education"),
                     "Skills": hit.entity.get("Skills"),
                     "doc": hit.entity.get("doc"),
+                    "Phone": hit.entity.get("Phone"),
+                    "Location": hit.entity.get("Location")
                 },
                 "dense_score": 0.0,  # Placeholder: Milvus RRF combines scores
                 "rerank_score": 0.0,  # Placeholder

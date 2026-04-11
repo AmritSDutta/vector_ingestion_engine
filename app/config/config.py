@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+    PII_CONFIDENCE_THRESHOLD: float = 0.7
+    IS_PII_REDACTION_ENABLED: bool = True
 
     @property
     def data_file_path(self) -> Path:
