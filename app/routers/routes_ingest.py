@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional, Any
 
@@ -31,6 +32,10 @@ async def upload_files() -> dict[str, str]:
         logger.info("Received request to upload files and start ingestion.")
         task = ingest_task_wrapper.delay()
         logger.info(f"Ingestion task triggered successfully with task_id: {task.id}")
+
+        # Trigger the background poller
+        asyncio.create_task(_poll_task_status(task.id))
+
         return {"message": "uploading started", "task_id": task.id}
 
     except Exception as exc:
@@ -80,3 +85,24 @@ async def list_collections() -> list[str]:
     except Exception as exc:
         logging.error('collection list errors %s', exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+async def _poll_task_status(task_id: str):
+    """
+    Background task to poll Celery for status and log it to the application console.
+    """
+    from celery.result import AsyncResult
+    logger.info(f"Started background polling for Task ID: {task_id}")
+
+    while True:
+        res = AsyncResult(task_id, app=celery_app)
+        status = res.status
+        info = res.info if not res.ready() else res.result
+
+        # Extract step information if available in meta
+        step = info.get('step', 'N/A') if isinstance(info, dict) else 'N/A'
+        logger.info(f"Celery Task Status reporter: Task {task_id} | Status: {status} | Step: {step}")
+        if res.ready():
+            logger.info(f"Celery Task Status reporter: Task {task_id} has finished with status: {status}")
+            break
+        await asyncio.sleep(5)
