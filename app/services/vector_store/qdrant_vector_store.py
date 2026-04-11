@@ -109,12 +109,17 @@ class QdrantStore(VectorStore):
                 )
                 )
 
-            # 4. Use upsert for better handling of mixed vector types
-            result: UpdateResult = self.qdrant_client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
-            logging.info(f'Successfully uploaded {result} points to {self.collection_name}')
+            # 4. Use upsert for better handling of mixed vector types in batches
+            batch_size = get_settings().BATCH_SIZE
+            total_points = len(points)
+            for i in range(0, total_points, batch_size):
+                batch_points = points[i:i + batch_size]
+                result: UpdateResult = self.qdrant_client.upsert(
+                    collection_name=self.collection_name,
+                    points=batch_points
+                )
+                logging.info(f'Successfully uploaded batch {i // batch_size + 1}, {len(batch_points)} points. Status: {result.status}')
+            logging.info(f'Successfully uploaded total {total_points} points to {self.collection_name}')
 
         except Exception as e:
             logging.error(f'Qdrant persistence error: {e}')

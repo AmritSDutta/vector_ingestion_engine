@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     DB_NAME: str = 'resume_vector_db'
     DB_USER: str = 'some_user'
     DB_PASSWORD: str = 'some_password'
-    POSTGRES_BATCH_SIZE: int = 100
+    BATCH_SIZE: int = 15
 
     REDIS_URL: str = "redis://localhost:6379/0"
 

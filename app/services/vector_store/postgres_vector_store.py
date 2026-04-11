@@ -70,7 +70,7 @@ class PGVectorStore(VectorStore):
     async def save(self, data: DataFrame):
         """Persists data into Postgres using asyncpg."""
         settings = get_settings()
-        batch_size = settings.POSTGRES_BATCH_SIZE
+        batch_size = settings.BATCH_SIZE
         conn = await self._get_connection()
         try:
             batch_data = []
@@ -201,7 +201,7 @@ class PGVectorStore(VectorStore):
             LIMIT $2 * 4
         )
         SELECT 
-            r.id, r.resume_id, r.name, r.category, r.education, r.skills, r.summary,
+            r.id, r.resume_id, r.name, r.category, r.education, r.skills, r.summary,r.phone, r.location,
             (COALESCE(1.0 / (60 + vs.rank), 0.0) + COALESCE(1.0 / (60 + ts.rank), 0.0)) as rrf_score
         FROM vector_search vs
         FULL OUTER JOIN text_search ts ON vs.resume_id = ts.resume_id

@@ -23,7 +23,7 @@ async def ingest_and_store_embedding(progress_callback: Callable[[str], None] = 
         progress_callback('Loading Data')
 
     pd_data = pd.read_json(get_settings().data_file_path)
-    data = pd_data.iloc[0:3].copy()
+    data = pd_data.iloc[:-1].copy()
     logging.info(f"Total rows selected from file: {len(data)}")
 
     texts_to_embed: list[str] = data["overall"].tolist()
@@ -52,7 +52,7 @@ async def ingest_and_store_to_all_database(progress_callback: Callable[[str], No
     from app.services.utils.pii_redaction import PII_Redactor
     pii_redactor = PII_Redactor()
     pd_data = pd.read_json(get_settings().data_file_path)
-    data = pd_data.iloc[0:3].copy()
+    data = pd_data.iloc[:-1].copy()
     logging.info(f"Total rows selected from file: {len(data)}")
 
     redacted_texts = await pii_redactor.do_pii_redaction_text(data["overall"].tolist())
