@@ -1,8 +1,10 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel, Field, field_validator
+from pyrate_limiter import Limiter, Rate, Duration
 
 from .request_validator import sanitize_passage
 from ..services.query_service import query_handler, hybrid_query_handler
@@ -25,7 +27,8 @@ class QueryIn(BaseModel):
         return v
 
 
-@query_router.post("/analyse", status_code=200, response_model=dict[str, list[Any]])
+@query_router.post("/analyse", status_code=200, response_model=dict[str, list[Any]],
+                   dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(1, Duration.SECOND * 15))))])
 async def search_docs(query: QueryIn) -> dict[str, list[Any]]:
     """
     Retrieve items by category with an optional limit.
@@ -36,7 +39,8 @@ async def search_docs(query: QueryIn) -> dict[str, list[Any]]:
     return ans
 
 
-@query_router.post("/hybrid_analyse", status_code=200, response_model=dict[str, list[Any]])
+@query_router.post("/hybrid_analyse", status_code=200, response_model=dict[str, list[Any]],
+                   dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(1, Duration.SECOND * 15))))])
 async def hybrid_search_docs(query: QueryIn) -> dict[str, list[Any]]:
     """
     Retrieve items by category with an optional limit.
