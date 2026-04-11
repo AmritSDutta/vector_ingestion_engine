@@ -101,8 +101,8 @@ async def _poll_task_status(task_id: str):
 
         # Extract step information if available in meta
         step = info.get('step', 'N/A') if isinstance(info, dict) else 'N/A'
-        logger.info(f"Celery Task Status reporter: Task {task_id} | Status: {status} | Step: {step}")
+        logger.info(f"[Task Status reporter]: Task {task_id} | Status: {status} | Step: {step}")
         if res.ready():
-            logger.info(f"Celery Task Status reporter: Task {task_id} has finished with status: {status}")
+            logger.info(f"[Task Status reporter]: Task {task_id} has finished with status: {status}")
             break
         await asyncio.sleep(5)
