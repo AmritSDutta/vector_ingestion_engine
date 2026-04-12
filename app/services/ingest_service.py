@@ -13,8 +13,7 @@ async def _get_custom_embedding(texts: list[str]) -> list[Any]:
     """Generate a Gemini embedding for a given text."""
     import asyncio
     embedding_service = get_embedding_service()
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, embedding_service.embed_batch, texts)
+    return await embedding_service.embed_batch(texts)
 
 
 async def ingest_and_store_embedding(progress_callback: Callable[[str], None] = None) -> dict:
