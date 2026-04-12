@@ -14,17 +14,17 @@ class GenAIEmbeddingService(EmbeddingService):
 
     def __init__(self, api_key: str = None):
         settings = get_settings()
-        self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
+        self.client = genai.Client(api_key=api_key).aio if api_key else genai.Client().aio
         self.model: str = settings.EMBEDDING_MODEL
         self.dimension: int = settings.EMBEDDING_DIM
         self.type: str = "semantic_similarity"
 
-    def embed(self, texts: str,
-              task_type: str = None,
-              output_dimensionality: int = None) -> List[float]:
+    async def embed(self, texts: str,
+                    task_type: str = None,
+                    output_dimensionality: int = None) -> List[float]:
         """google genai embedding for text collections."""
         logging.info(f'embedding, task_type: {task_type}, output_dimensionality: {output_dimensionality}')
-        resp = self.client.models.embed_content(
+        resp = await self.client.models.embed_content(
             model=self.model,
             contents=[texts],
             config={
@@ -35,7 +35,7 @@ class GenAIEmbeddingService(EmbeddingService):
 
         return resp.embeddings[0].values
 
-    def embed_batch(
+    async def embed_batch(
             self,
             texts: Sequence[str],
             batch_size: int = 32,
@@ -60,7 +60,7 @@ class GenAIEmbeddingService(EmbeddingService):
         for i in range(0, len(texts), batch_size):
             batch = texts[i: i + batch_size]
 
-            resp = self.client.models.embed_content(
+            resp = await self.client.models.embed_content(
                 model=self.model,
                 contents=batch,
                 config=cfg,
