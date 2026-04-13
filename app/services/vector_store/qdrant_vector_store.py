@@ -63,7 +63,8 @@ class QdrantStore(VectorStore):
             logging.info(f'created qdrant collection: {effective_collection_name}')
 
         except Exception as e:
-            logging.error('qdrant initialization error', e)
+            logging.error(f'qdrant initialization error {e}', exc_info=True)
+            raise
 
     async def save(self, data: DataFrame):
         try:
@@ -122,62 +123,74 @@ class QdrantStore(VectorStore):
             logging.info(f'Successfully uploaded total {total_points} points to {self.collection_name}')
 
         except Exception as e:
-            logging.error(f'Qdrant persistence error: {e}')
-            raise e
+            logging.error(f'Qdrant persistence error: {e}', exc_info=True)
+            raise
 
     async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         # 1. dense ranking
-        hits = self.qdrant_client.query_points(
-            collection_name=self.collection_name,
-            query=list(query_embedding),
-            using="genai",
-            limit=n_results).points
-        # Extract descriptions for reranking
-        descriptions = [hit.payload["doc"] for hit in hits]
+        try:
+            hits = self.qdrant_client.query_points(
+                collection_name=self.collection_name,
+                query=list(query_embedding),
+                using="genai",
+                limit=n_results).points
+            # Extract descriptions for reranking
+            descriptions = [hit.payload["doc"] for hit in hits]
 
-        # 2. Rerank using cross-encoder / LLM reranker
-        rerank_scores = self.reranker.rerank(query, descriptions)  # list[float]
+            # 2. Rerank using cross-encoder / LLM reranker
+            rerank_scores = self.reranker.rerank(query, descriptions)  # list[float]
 
-        # 3. Combine dense score + rerank score
-        combined = []
-        for hit, rerank_score in zip(hits, rerank_scores):
-            logging.info(f"""
-                hit.score: {float(hit.score)},
-                rerank_score: {float(rerank_score)},
-                sneak peek {hit.payload["doc"][:25]} ....
-                """
-                         )
+            # 3. Combine dense score + rerank score
+            combined = []
+            for hit, rerank_score in zip(hits, rerank_scores):
+                logging.info(f"""
+                    hit.score: {float(hit.score)},
+                    rerank_score: {float(rerank_score)},
+                    sneak peek {hit.payload["doc"][:25]} ....
+                    """
+                             )
 
-            combined_score = float(hit.score) + float(rerank_score)
-            combined.append({
-                "payload": hit.payload,
-                "dense_score": float(hit.score),
-                "rerank_score": float(rerank_score),
-                "final_score": combined_score
-            })
+                combined_score = float(hit.score) + float(rerank_score)
+                combined.append({
+                    "payload": hit.payload,
+                    "dense_score": float(hit.score),
+                    "rerank_score": float(rerank_score),
+                    "final_score": combined_score
+                })
 
-        # 4. Sort by final score descending
-        combined.sort(key=lambda x: x["final_score"], reverse=True)
-        logging.info(f'{len(combined)} combined results')
-        return {"results": combined}
+            # 4. Sort by final score descending
+            combined.sort(key=lambda x: x["final_score"], reverse=True)
+            logging.info(f'{len(combined)} combined results')
+            return {"results": combined}
+
+        except Exception as e:
+            logging.error(f'Qdrant persistence error: {e}', exc_info=True)
+            raise
 
     async def delete_collection(self) -> Optional[str]:
         validate_collection_name(self.collection_name)
         if self.collection_name is None:
             logging.info(f"collection name is None ")
             return None
-
-        self.qdrant_client.delete_collection(self.collection_name)
-        logging.info(f'deleted collection: {self.collection_name}')
-        return self.collection_name
+        try:
+            self.qdrant_client.delete_collection(self.collection_name)
+            logging.info(f'deleted collection: {self.collection_name}')
+            return self.collection_name
+        except Exception as e:
+            logging.error(f'Qdrant persistence error: {e}', exc_info=True)
+            raise
 
     async def list_collection(self) -> list[str]:
         logging.info('listing collection')
-        response: CollectionsResponse = self.qdrant_client.get_collections()
-        logging.info(f'returned collections: {response.collections}')
-        existing_collections_list = [collection.name for collection in response.collections]
-        logging.info(f'found {len(existing_collections_list)} collections')
-        return existing_collections_list
+        try:
+            response: CollectionsResponse = self.qdrant_client.get_collections()
+            logging.info(f'returned collections: {response.collections}')
+            existing_collections_list = [collection.name for collection in response.collections]
+            logging.info(f'found {len(existing_collections_list)} collections')
+            return existing_collections_list
+        except Exception as e:
+            logging.error(f'Qdrant persistence error: {e}', exc_info=True)
+            raise
 
     async def hybrid_search(self, query_embedding: Sequence[float],
                       n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
@@ -187,29 +200,33 @@ class QdrantStore(VectorStore):
         sparse_query = next(self.bm25_embedding_model.query_embed(query))
         colbert_query = next(self.late_interaction_embedding_model.query_embed(query))
 
-        # 2. Single-call Multi-stage Search: (Dense + Sparse) -> RRF -> ColBERT Rerank
-        response = self.qdrant_client.query_points(
-            collection_name=self.collection_name,
-            prefetch=[
-                models.Prefetch(
-                    prefetch=[
-                        models.Prefetch(query=query_embedding, using="genai", limit=n_results * 10),
-                        models.Prefetch(
-                            query=models.SparseVector(
-                                indices=sparse_query.indices.tolist(),
-                                values=sparse_query.values.tolist()
+        try:
+            # 2. Single-call Multi-stage Search: (Dense + Sparse) -> RRF -> ColBERT Rerank
+            response = self.qdrant_client.query_points(
+                collection_name=self.collection_name,
+                prefetch=[
+                    models.Prefetch(
+                        prefetch=[
+                            models.Prefetch(query=query_embedding, using="genai", limit=n_results * 10),
+                            models.Prefetch(
+                                query=models.SparseVector(
+                                    indices=sparse_query.indices.tolist(),
+                                    values=sparse_query.values.tolist()
+                                ),
+                                using="bm25",
+                                limit=n_results * 10
                             ),
-                            using="bm25",
-                            limit=n_results * 10
-                        ),
-                    ],
-                    query=models.FusionQuery(fusion=models.Fusion.RRF),
-                    limit=n_results * 10  # This pool is sent to ColBERT reranking
-                )
-            ],
-            query=colbert_query.tolist(),  # The "Reranker"
-            using="colbert",
-            limit=n_results
-        )
-        logging.info(f'query results: {len(response.points)}')
-        return {"results": [p.payload for p in response.points]}
+                        ],
+                        query=models.FusionQuery(fusion=models.Fusion.RRF),
+                        limit=n_results * 10  # This pool is sent to ColBERT reranking
+                    )
+                ],
+                query=colbert_query.tolist(),  # The "Reranker"
+                using="colbert",
+                limit=n_results
+            )
+            logging.info(f'query results: {len(response.points)}')
+            return {"results": [p.payload for p in response.points]}
+        except Exception as e:
+            logging.error(f'Qdrant persistence error: {e}', exc_info=True)
+            raise

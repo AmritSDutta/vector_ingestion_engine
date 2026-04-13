@@ -3,10 +3,12 @@ import logging
 import re
 
 from fastapi import HTTPException
-from openai import OpenAI, RateLimitError, APIError, APIConnectionError
+from openai import  RateLimitError, APIError, APIConnectionError, AsyncOpenAI
 from openai.types import ModerationCreateResponse
 
 logger = logging.getLogger(__name__)
+
+_openai_client = AsyncOpenAI()
 # Expanded, Docker-aware threat patterns
 MALICIOUS_PATTERNS = [
     # Dangerous Python / OS execution
@@ -44,7 +46,7 @@ MALICIOUS_PATTERNS = [
 COMPILED_PATTERNS = [re.compile(p) for p in MALICIOUS_PATTERNS]
 
 
-def sanitize_passage(user_input: str, max_len: int = 5000) -> str:
+async def sanitize_passage(user_input: str, max_len: int = 5000) -> str:
     logging.info(f'scanning for malicious content: {user_input}')
     if not isinstance(user_input, str):
         raise HTTPException(400, "Invalid type")
@@ -73,24 +75,22 @@ def sanitize_passage(user_input: str, max_len: int = 5000) -> str:
         if rx.search(clean):
             raise HTTPException(400, "Malicious content detected by {}".format(rx.pattern))
 
-    do_moderation(user_input)  # try with openai moderation
+    await do_moderation(user_input)  # try with openai moderation
 
     return clean
 
 
-def do_moderation(user_input: str):
-    logging.info(f'moderation scanning for malicious content: {user_input}')
-    client = OpenAI()
-
+async def do_moderation(user_input: str):
     try:
-        resp: ModerationCreateResponse = client.moderations.create(
+        resp: ModerationCreateResponse = await _openai_client.moderations.create(
             model="omni-moderation-latest",
             input=user_input
         )
         any_malicious_content = any(result.flagged for result in resp.results)
-        logging.info(f'moderation result, malicious content found ? {any_malicious_content}')
+        logging.warning(f'moderation result, malicious content found ? {any_malicious_content}')
         if any_malicious_content:
             raise HTTPException(status_code=403, detail="Unsupported content detected")
+        logging.info(f'moderation scanning completed')
 
     except RateLimitError:
         # Fail closed (block the request)

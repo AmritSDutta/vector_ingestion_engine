@@ -8,6 +8,7 @@ from pyrate_limiter import Limiter, Rate, Duration
 
 from .request_validator import sanitize_passage
 from ..services.query_service import query_handler, hybrid_query_handler
+from ..services.utils.time_helper import time_coro
 
 logger = logging.getLogger(__name__)
 query_router = APIRouter(prefix="/query", tags=["query"])
@@ -33,8 +34,8 @@ async def search_docs(query: QueryIn) -> dict[str, list[Any]]:
     """
     Retrieve items by category with an optional limit.
     """
-    logging.info(f'received req {query.q}')
-    sanitize_passage(query.q)
+    logging.info(f'### Received req {query.q[:25]} ...')
+    await time_coro('sanitize_moderation', sanitize_passage(query.q))
     ans: dict[str, list[Any]] = await query_handler(query.q, query.top_k)
     return ans
 
@@ -45,7 +46,7 @@ async def hybrid_search_docs(query: QueryIn) -> dict[str, list[Any]]:
     """
     Retrieve items by category with an optional limit.
     """
-    logging.info(f'received req: {query.q}')
-    sanitize_passage(query.q)
+    logging.info(f'### Received req: {query.q[:25]} ...')
+    await time_coro('sanitize_moderation', sanitize_passage(query.q))
     ans: dict[str, list[Any]] = await hybrid_query_handler(query.q, query.top_k)
     return ans

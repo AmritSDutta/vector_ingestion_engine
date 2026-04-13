@@ -3,7 +3,7 @@ from typing import Any, Callable
 import pandas as pd
 from app.config.config import get_settings
 from app.services.embedding.EmbeddingFactory import get_embedding_service
-from app.services.utils.text_cleaner import clean_text
+from app.services.utils.text_cleaner import clear_stop_words
 from app.services.vector_store.VectorStoreFactory import get_vector_store, DatabaseType
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ async def ingest_and_store_to_all_database(progress_callback: Callable[[str], No
 
     redacted_texts = await pii_redactor.do_pii_redaction_text(data["overall"].tolist())
     
-    texts_to_embed = [clean_text(text) for text in redacted_texts]
+    texts_to_embed = [clear_stop_words(text) for text in redacted_texts]
     if progress_callback:
         progress_callback('Embedding started')
 

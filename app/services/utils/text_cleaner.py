@@ -10,7 +10,7 @@ except LookupError:
 STOP_WORDS = set(stopwords.words('english'))
 
 
-def clean_text(text: str) -> str:
+def clear_stop_words(text: str) -> str:
     """
     Filters words case-insensitively against the NLTK English stopwords set.
     """

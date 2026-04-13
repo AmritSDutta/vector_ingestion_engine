@@ -62,8 +62,8 @@ class PGVectorStore(VectorStore):
 
             logger.info(f"Postgres collection {coll_name} initialized successfully.")
         except Exception as e:
-            logger.error(f"Postgres initialization error: {e}")
-            raise e
+            logger.error(f"Postgres initialization error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
 
@@ -104,8 +104,8 @@ class PGVectorStore(VectorStore):
 
             logger.info(f"Successfully saved {len(data)} records to Postgres.")
         except Exception as e:
-            logger.error(f"Postgres save error: {e}")
-            raise e
+            logger.error(f"Postgres save error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
 
@@ -174,8 +174,8 @@ class PGVectorStore(VectorStore):
             results.sort(key=lambda x: x["final_score"], reverse=True)
             return {"results": results}
         except Exception as e:
-            logger.error(f"Postgres query error: {e}")
-            return {"results": []}
+            logger.error(f"Postgres query error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
 
@@ -221,8 +221,8 @@ class PGVectorStore(VectorStore):
                 })
             return {"results": results}
         except Exception as e:
-            logger.error(f"Postgres hybrid search error: {e}")
-            return {"results": []}
+            logger.error(f"Postgres hybrid search error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
 
@@ -235,8 +235,8 @@ class PGVectorStore(VectorStore):
             await conn.execute(f"DROP TABLE IF EXISTS {coll_name};")
             return coll_name
         except Exception as e:
-            logger.error(f"Postgres delete error: {e}")
-            return None
+            logger.error(f"Postgres delete error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
 
@@ -247,7 +247,7 @@ class PGVectorStore(VectorStore):
             rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
             return [r["table_name"] for r in rows]
         except Exception as e:
-            logger.error(f"Postgres list error: {e}")
-            return []
+            logger.error(f"Postgres list error: {e}", exc_info=True)
+            raise
         finally:
             await conn.close()
