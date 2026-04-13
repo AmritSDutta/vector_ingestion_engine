@@ -87,8 +87,8 @@ async def do_moderation(user_input: str):
             input=user_input
         )
         any_malicious_content = any(result.flagged for result in resp.results)
-        logging.warning(f'moderation result, malicious content found ? {any_malicious_content}')
         if any_malicious_content:
+            logging.warning(f'moderation result, malicious content found ? {any_malicious_content}')
             raise HTTPException(status_code=403, detail="Unsupported content detected")
         logging.info(f'moderation scanning completed')
 

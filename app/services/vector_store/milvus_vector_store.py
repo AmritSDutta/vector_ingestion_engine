@@ -207,7 +207,8 @@ class MilvusStore(VectorStore):
                 collection_name=self.collection_name,
                 reqs=reqs,
                 ranker=ranker,
-                output_fields=["ResumeID", "Name", "Category", "Education", "Skills", "Summary", "doc", "Phone","Location"],
+                output_fields=["ResumeID", "Name", "Category", "Education",
+                               "Skills", "Summary", "doc", "Phone", "Location"],
                 limit=n_results
             )
 

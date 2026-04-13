@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional, Sequence, Dict, Any
 
@@ -16,9 +17,15 @@ class PGVectorStore(VectorStore):
         self.conn_str = settings.DB_DSN
         self.collection_name = settings.COLLECTION_NAME
         self.reranker = get_reranker_model()
+        self.pool = None
+        self.pool_lock = asyncio.Lock()
 
-    async def _get_connection(self):
-        return await asyncpg.connect(self.conn_str)
+    async def _get_pool(self):
+        if self.pool is None:
+            async with self.pool_lock:
+                if self.pool is None:
+                    self.pool = await asyncpg.create_pool(self.conn_str, min_size=3, max_size=10)
+        return self.pool
 
     async def create(self):
         """Initializes the database schema if it doesn't exist."""
@@ -26,88 +33,85 @@ class PGVectorStore(VectorStore):
         validate_collection_name(coll_name)
         logger.info(f"Initializing Postgres collection: {coll_name}")
 
-        conn = await self._get_connection()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                # Enable extensions
+                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-        try:
-            # Enable extensions
-            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                # Create Table
+                await conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {coll_name} (
+                        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                        resume_id TEXT UNIQUE,
+                        name TEXT,
+                        category TEXT,
+                        education TEXT,
+                        skills TEXT[],
+                        summary TEXT,
+                        phone TEXT NULL,
+                        location TEXT NULL,
+                        overall TEXT,
+                        embedding VECTOR({get_settings().EMBEDDING_DIM}),
+                        fts_vector tsvector GENERATED ALWAYS AS (
+                            to_tsvector('english', coalesce(overall, ''))
+                        ) STORED
+                    );
+                """)
 
-            # Create Table
-            await conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS {coll_name} (
-                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                    resume_id TEXT UNIQUE,
-                    name TEXT,
-                    category TEXT,
-                    education TEXT,
-                    skills TEXT[],
-                    summary TEXT,
-                    phone TEXT NULL,
-                    location TEXT NULL,
-                    overall TEXT,
-                    embedding VECTOR({get_settings().EMBEDDING_DIM}),
-                    fts_vector tsvector GENERATED ALWAYS AS (
-                        to_tsvector('english', coalesce(overall, ''))
-                    ) STORED
-                );
-            """)
+                # Create Indexes
+                await conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_embedding_hnsw ON {coll_name} USING hnsw (embedding vector_cosine_ops);")
+                await conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_fts_gin ON {coll_name} USING gin (fts_vector);")
+                await conn.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_skills_gin ON {coll_name} USING gin (skills);")
 
-            # Create Indexes
-            await conn.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_embedding_hnsw ON {coll_name} USING hnsw (embedding vector_cosine_ops);")
-            await conn.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_fts_gin ON {coll_name} USING gin (fts_vector);")
-            await conn.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_{coll_name}_skills_gin ON {coll_name} USING gin (skills);")
-
-            logger.info(f"Postgres collection {coll_name} initialized successfully.")
-        except Exception as e:
-            logger.error(f"Postgres initialization error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+                logger.info(f"Postgres collection {coll_name} initialized successfully.")
+            except Exception as e:
+                logger.error(f"Postgres initialization error: {e}", exc_info=True)
+                raise
 
     async def save(self, data: DataFrame):
         """Persists data into Postgres using asyncpg."""
         settings = get_settings()
         batch_size = settings.BATCH_SIZE
-        conn = await self._get_connection()
-        try:
-            batch_data = []
-            for _, row in data.iterrows():
-                # Handle skills conversion: "Python, SQL" -> ["Python", "SQL"]
-                skills = row.get("Skills", [])
-                if isinstance(skills, str):
-                    skills = [s.strip() for s in skills.split(",") if s.strip()]
-                elif not isinstance(skills, list):
-                    skills = []
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                batch_data = []
+                for _, row in data.iterrows():
+                    # Handle skills conversion: "Python, SQL" -> ["Python", "SQL"]
+                    skills = row.get("Skills", [])
+                    if isinstance(skills, str):
+                        skills = [s.strip() for s in skills.split(",") if s.strip()]
+                    elif not isinstance(skills, list):
+                        skills = []
 
-                overall_text = row.get("overall", "")
+                    overall_text = row.get("overall", "")
 
-                # Convert embedding to list of floats for asyncpg
-                emb = row["embeddings"]
-                if hasattr(emb, "tolist"):
-                    emb = emb.tolist()
+                    # Convert embedding to list of floats for asyncpg
+                    emb = row["embeddings"]
+                    if hasattr(emb, "tolist"):
+                        emb = emb.tolist()
 
-                batch_data.append((
-                    str(row.get("ResumeID")), row.get("Name"), row.get("Category"),
-                    row.get("Education"), skills, row.get("Summary"), row.get("Phone"), row.get("Location"),
-                    overall_text, emb
-                ))
+                    batch_data.append((
+                        str(row.get("ResumeID")), row.get("Name"), row.get("Category"),
+                        row.get("Education"), skills, row.get("Summary"), row.get("Phone"), row.get("Location"),
+                        overall_text, emb
+                    ))
 
-                if len(batch_data) >= batch_size:
+                    if len(batch_data) >= batch_size:
+                        await self._execute_batch(conn, batch_data)
+                        batch_data = []
+
+                if batch_data:
                     await self._execute_batch(conn, batch_data)
-                    batch_data = []
 
-            if batch_data:
-                await self._execute_batch(conn, batch_data)
-
-            logger.info(f"Successfully saved {len(data)} records to Postgres.")
-        except Exception as e:
-            logger.error(f"Postgres save error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+                logger.info(f"Successfully saved {len(data)} records to Postgres.")
+            except Exception as e:
+                logger.error(f"Postgres save error: {e}", exc_info=True)
+                raise
 
     async def _execute_batch(self, conn, batch):
         """Helper to execute a batch of inserts using executemany."""
@@ -130,54 +134,53 @@ class PGVectorStore(VectorStore):
     async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
         """Standard semantic search using asyncpg."""
         results = []
-        conn = await self._get_connection()
-        try:
-            # Convert embedding to string format for pgvector
-            if hasattr(query_embedding, "tolist"):
-                emb_str = str(query_embedding.tolist())
-            else:
-                emb_str = str(list(query_embedding))
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                # Convert embedding to string format for pgvector
+                if hasattr(query_embedding, "tolist"):
+                    emb_str = str(query_embedding.tolist())
+                else:
+                    emb_str = str(list(query_embedding))
 
-            rows = await conn.fetch(
-                f"""
-                SELECT resume_id, name, category, education, skills, summary, phone, location,overall,
-                       (embedding <=> $1::vector) as distance
-                FROM {self.collection_name}
-                ORDER BY distance ASC
-                LIMIT $2;
-                """,
-                emb_str, n_results
-            )
+                rows = await conn.fetch(
+                    f"""
+                    SELECT resume_id, name, category, education, skills, summary, phone, location,overall,
+                           (embedding <=> $1::vector) as distance
+                    FROM {self.collection_name}
+                    ORDER BY distance ASC
+                    LIMIT $2;
+                    """,
+                    emb_str, n_results
+                )
 
-            if not rows:
-                return {"results": []}
+                if not rows:
+                    return {"results": []}
 
-            # Prepare for reranking
-            descriptions = [row["overall"] for row in rows]
-            rerank_scores = self.reranker.rerank(query, descriptions)
+                # Prepare for reranking
+                descriptions = [row["overall"] for row in rows]
+                rerank_scores = self.reranker.rerank(query, descriptions)
 
-            for row_data, r_score in zip(rows, rerank_scores):
-                # row_data is a Record object, convert to dict
-                row = dict(row_data)
-                distance = row.pop("distance")
-                row.pop("overall", None)  # Remove large overall text from response
+                for row_data, r_score in zip(rows, rerank_scores):
+                    # row_data is a Record object, convert to dict
+                    row = dict(row_data)
+                    distance = row.pop("distance")
+                    row.pop("overall", None)  # Remove large overall text from response
 
-                dense_score = 1.0 - float(distance)
-                combined_score = dense_score + float(r_score)
-                results.append({
-                    "payload": row,
-                    "dense_score": dense_score,
-                    "rerank_score": float(r_score),
-                    "final_score": combined_score
-                })
+                    dense_score = 1.0 - float(distance)
+                    combined_score = dense_score + float(r_score)
+                    results.append({
+                        "payload": row,
+                        "dense_score": dense_score,
+                        "rerank_score": float(r_score),
+                        "final_score": combined_score
+                    })
 
-            results.sort(key=lambda x: x["final_score"], reverse=True)
-            return {"results": results}
-        except Exception as e:
-            logger.error(f"Postgres query error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+                results.sort(key=lambda x: x["final_score"], reverse=True)
+                return {"results": results}
+            except Exception as e:
+                logger.error(f"Postgres query error: {e}", exc_info=True)
+                raise
 
     async def hybrid_search(self, query_embedding: Sequence[float],
                             n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
@@ -210,44 +213,42 @@ class PGVectorStore(VectorStore):
         LIMIT $2;
         """
         results = []
-        conn = await self._get_connection()
-        try:
-            rows = await conn.fetch(sql, emb_str, n_results, query)
-            for row_data in rows:
-                row = dict(row_data)
-                results.append({
-                    "payload": row,
-                    "final_score": float(row.pop("rrf_score"))
-                })
-            return {"results": results}
-        except Exception as e:
-            logger.error(f"Postgres hybrid search error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(sql, emb_str, n_results, query)
+                for row_data in rows:
+                    row = dict(row_data)
+                    results.append({
+                        "payload": row,
+                        "final_score": float(row.pop("rrf_score"))
+                    })
+                return {"results": results}
+            except Exception as e:
+                logger.error(f"Postgres hybrid search error: {e}", exc_info=True)
+                raise
 
     async def delete_collection(self) -> Optional[str]:
         """Drops the table."""
         coll_name = self.collection_name
         validate_collection_name(coll_name)
-        conn = await self._get_connection()
-        try:
-            await conn.execute(f"DROP TABLE IF EXISTS {coll_name};")
-            return coll_name
-        except Exception as e:
-            logger.error(f"Postgres delete error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                await conn.execute(f"DROP TABLE IF EXISTS {coll_name};")
+                return coll_name
+            except Exception as e:
+                logger.error(f"Postgres delete error: {e}", exc_info=True)
+                raise
+        return None
 
     async def list_collection(self) -> list[str]:
         """Lists available tables in the public schema."""
-        conn = await self._get_connection()
-        try:
-            rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
-            return [r["table_name"] for r in rows]
-        except Exception as e:
-            logger.error(f"Postgres list error: {e}", exc_info=True)
-            raise
-        finally:
-            await conn.close()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            try:
+                rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+                return [r["table_name"] for r in rows]
+            except Exception as e:
+                logger.error(f"Postgres list error: {e}", exc_info=True)
+                raise
