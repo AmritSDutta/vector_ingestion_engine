@@ -27,6 +27,22 @@ A high-performance, production-ready Retrieval-Augmented Generation (RAG) pipeli
 
 ---
 
+## 💎 Mission-Critical Endpoint: Secure Ingestion
+
+The `/upload_to_all_database` endpoint serves as the **Secure Command Center** of the ingestion pipeline. It orchestrates a complex, non-blocking workflow designed for high-concurrency environments:
+
+### 🛠️ Technical Workflow & Tech Stack
+*   **Restricted Entry (SlowAPI):** Protected by a strict rate limiter (1 request per 30 minutes) to ensure system stability.
+*   **Async Orchestration (Celery + Redis):** Offloads heavy processing to background workers, returning a `task_id` for real-time status tracking.
+*   **Privacy-First "Dark Processing" (Microsoft Presidio):** Deep entity recognition and anonymization scrub the text of all sensitive identity markers before they ever reach an LLM or database.
+*   **Neural Transformation (Gemini/Mistral AI):** Sanitized data is converted into high-dimensional embeddings using a factory-patterned AI service.
+*   **Atomic Multi-Sync (Triple-Write):** Simultaneously synchronizes data across three distinct vector architectures: **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)**.
+
+### 🎨 Visual Synthesis (Image Generation Prompt)
+> "A master-control room for a global AI network. In the center, a holographic interface shows a file being uploaded to '/upload_to_all_database' with a 'SECURE' status bar. To the left, a digital 'X-Ray' scanner (Microsoft Presidio) is highlighting and redacting names and dates from scrolling text. In the center-top, a brain-like neural lattice (Gemini/Mistral AI) is glowing as it turns the text into golden geometric vectors. On the right, three massive, distinct server monoliths labeled 'QDRANT', 'MILVUS', and 'POSTGRES' are receiving synchronized streams of golden energy. Below the interface, a 'CELERY' status dashboard shows active task progress bars moving in real-time. Hyper-realistic, 8k resolution, cinematic lighting with a mix of deep-sea blue and electric gold accents."
+
+---
+
 ## 🎯 Architecture Overview
 
 This system implements a **CQRS-style separation** between write and read operations:
