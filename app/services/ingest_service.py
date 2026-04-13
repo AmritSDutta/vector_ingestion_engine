@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 async def _get_custom_embedding(texts: list[str]) -> list[Any]:
     """Generate a Gemini embedding for a given text."""
-    import asyncio
     embedding_service = get_embedding_service()
     return await embedding_service.embed_batch(texts)
 

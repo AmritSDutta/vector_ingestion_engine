@@ -17,12 +17,42 @@ A high-performance, production-ready Retrieval-Augmented Generation (RAG) pipeli
 
 ### 3. Pluggable Vector Infrastructure
 *   **Multi-Store Support:** Seamlessly switch between **Qdrant**, **Milvus**, and **PostgreSQL (pgvector)** via the Factory pattern.
-*   **Optimized PG Schema:** Native Full-Text Search (`tsvector`) and high-performance array searching (`TEXT[]`) for skills matching.
+*   **Optimized PG Schema:** Native Full-Text Search (`tsvector`) and high-performance array searching (`TEXT[]`) with `asyncpg` connection pooling and double-checked locking.
 
 ### 4. Enterprise-Grade Security & Eval
+*   **PII Redaction:** Automatic anonymization of sensitive data using **Microsoft Presidio**.
+*   **Content Moderation:** Integrated with **OpenAI Moderation API** and custom pattern-based threat detection.
+*   **RAG Evaluation:** Automated faithfulness and context relevancy scoring using **LlamaIndex** and OpenAI `gpt-4o-mini`.
 *   **Rate Limiting:** Protects endpoints using `fastapi-limiter`.
-*   **RAG Evaluation:** Automated faithfulness and context relevancy scoring using OpenAI `gpt-4o-mini`.
-*   **Input Sanitization:** Pattern-based threat detection for all user queries.
+
+---
+
+## 🎯 Architecture Overview
+
+This system implements a **CQRS-style separation** between write and read operations:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   INGESTER APP                          │
+│  (Write Side - Separate Application Logic)               │
+│  • create()              - Create collections              │
+│  • save()                - Batch insert documents         │
+│  • delete_collection()   - Drop collections              │
+│  • Data migration, ETL, schema management              │
+└───────────────┬─────────────────────────────────────────┘
+                │
+                │ (Shared Vector Database)
+                │
+                ▼
+┌─────────────────────────────────────────────────────────┐
+│              SEARCH API (This App)                       │
+│  (Read Side - Query Optimized)                            │
+│  • query()               - Dense vector search            │
+│  • hybrid_search()       - Multi-stage hybrid search      │
+│  • list_collection()     - Metadata queries               │
+│  • Connection pooling, caching, read replicas           │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -36,6 +66,7 @@ graph TD
 
     subgraph Backend [FastAPI Application]
         API[app/main.py]
+        RV[request_validator.py]
         Router[app/routers/app_router.py]
         
         subgraph Routers
@@ -48,12 +79,20 @@ graph TD
             QS[query_service.py]
             EF[EmbeddingFactory.py]
             VF[VectorStoreFactory.py]
+            PR[PII_Redactor.py]
+        end
+        
+        subgraph RAG_Utilities
+            EV[app/rag/eval.py]
+            RD[app/rag/reader.py]
+            TH[time_helper.py]
         end
     end
 
     subgraph AsyncTasks [Task Queue]
+        CT[app/celery_task.py]
         CW[app/celery_worker.py]
-        RD[(Redis)]
+        RD_REDIS[(Redis)]
     end
 
     subgraph "Vector Stores (Pluggable)"
@@ -63,15 +102,18 @@ graph TD
     end
 
     UI <--> API
-    API --> Router
+    API --> RV
+    RV --> Router
     Router --> IR & QR
-    IR -- Trigger --> CW
-    CW <--> RD
+    IR -- Trigger --> CT
+    CT --> CW
+    CW <--> RD_REDIS
     CW --> IS
     QR --> QS
-    
-    IS --> EF & VF
     QS --> EF & VF
+    
+    QS -.-> EV
+    QS -.-> TH
     
     VF --> QD | settings.VECTOR_STORE='qdrant' | QD
     VF --> MV | settings.VECTOR_STORE='milvus' | MV
@@ -85,7 +127,7 @@ graph TD
 Follow these steps in the exact order to launch the full distributed system.
 
 ### 1. Prerequisites & Environment
-*   **Python:** 3.10+
+*   **Python:** 3.12+ (Recommended)
 *   **Redis:** Required for Celery.
 *   **Vector DB:** An instance of Qdrant, Milvus, or Postgres (with pgvector).
 
@@ -95,14 +137,16 @@ Create a `.env` file in the root directory:
 # API Keys
 GOOGLE_API_KEY=your_gemini_key
 OPENAI_API_KEY=your_openai_key
+MISTRAL_API_KEY=your_mistral_key
 
 # Infrastructure
 REDIS_URL=redis://localhost:6379/0
-VECTOR_STORE=qdrant  # Options: qdrant, milvus, postgres
+VECTOR_STORE=milvus  # Options: qdrant, milvus, postgres
 
 # Vector DB Config
+MILVUS_URI=localhost
+MILVUS_TOKEN=your_token
 QDRANT_HOST=localhost
-QDRANT_PORT=6333
 DB_DSN=postgres://user:pass@localhost/resume_vector_db
 ```
 
@@ -147,46 +191,30 @@ streamlit run app/ui.py
 ## 📂 Project Structure
 
 *   **`app/main.py`**: Entry point for the FastAPI application.
+*   **`app/celery_task.py`**: Task definitions and progress callback management.
 *   **`app/celery_worker.py`**: Singleton Celery instance and worker config.
-*   **`app/celery_task.py`**: Celery task wrappers for background execution.
-*   **`app/services/`**: Core logic (Ingestion, Querying, Embedding/Vector Factories).
-*   **`app/routers/`**: REST API endpoints with rate limiting and background polling.
+*   **`app/rag/`**: RAG evaluation logic (`eval.py`) and file reading utilities (`reader.py`).
+*   **`app/services/`**: Core logic layer.
+    *   **`ingest_service.py`**: Handles loading, PII redaction, and multi-store distribution.
+    *   **`query_service.py`**: Orchestrates retrieval with latency tracking.
+    *   **`vector_store/`**: Factory for Qdrant, Milvus, and Postgres.
+*   **`app/routers/`**: REST API endpoints with rate limiting and `request_validator.py`.
 *   **`app/ui.py`**: Streamlit-based InsightScope dashboard.
 
 ---
 
-## 📝 SQL Schema (For PostgreSQL/pgvector)
-
-If using the `postgres` vector store, execute the following to set up your schema:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-
-CREATE TABLE IF NOT EXISTS resume_details (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    resume_id TEXT UNIQUE,
-    name TEXT,
-    category TEXT,
-    skills TEXT[],
-    overall TEXT,
-    embedding VECTOR(1024), -- Dimension for Gemini
-    fts_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(overall, ''))) STORED
-);
-
-CREATE INDEX IF NOT EXISTS idx_resume_hnsw ON resume_details USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS idx_resume_fts ON resume_details USING gin (fts_vector);
-CREATE INDEX IF NOT EXISTS idx_resume_skills ON resume_details USING gin (skills);
-```
-
----
-
-## 🧪 Testing
-Run the comprehensive test suite to verify ingestion and retrieval:
+## 🧪 Testing & Validation
+Run the comprehensive test suite and static type checks:
 ```bash
+# Run Unit Tests
 pytest
+
+# Run Type Checking
+pip install mypy
+mypy app
 ```
 
 ## 🛤️ Future Enhancements
-- [ ] **Apache Airflow Integration:** Multi-store distribution and embedding caching (Plan in `AIRFLOW_MULTI_STORE_IMPLEMENTATION_PLAN.md`).
-- [ ] **Advanced OCR:** Integration for complex PDF parsing.
-- [ ] **OAuth2 Integration:** Secure API access.
+- [ ] **Apache Airflow Integration:** Multi-stage ETL for high-volume document pipelines.
+- [ ] **OCR/PDF Adapter:** Native PDF extraction with layout analysis.
+- [ ] **Complex Filtering:** Skill-based matching logic (e.g., "years of experience" extraction).
