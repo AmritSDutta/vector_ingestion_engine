@@ -3,13 +3,13 @@ import os
 import shutil
 from pathlib import Path
 
-from app.config.config import Settings
+from app.config.config import Settings, get_settings
 
 
 def read_files(files: list[str]) -> Path:
     # Normalize inputs, detect pdf/image/text and return list of {"source":, "text":, "meta":}
     # TODO: call pdf parser / image OCR adapters
-    settings = Settings()
+    settings = get_settings()
     root_path: Path = Path(__file__).resolve().parent.parent.parent
     logging.info(f'root dir: {root_path}')
     logging.info(f'to be stored in from settings: {settings.FILE_STORE_DIR}')

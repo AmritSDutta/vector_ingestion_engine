@@ -2,7 +2,7 @@ import logging
 from enum import Enum
 from typing import Optional
 
-from app.config.config import Settings
+from app.config.config import get_settings
 from app.services.vector_store.milvus_vector_store import MilvusStore
 from app.services.vector_store.qdrant_vector_store import QdrantStore
 from app.services.vector_store.postgres_vector_store import PGVectorStore
@@ -21,7 +21,7 @@ class DatabaseType(Enum):
 
 def get_vector_store(db_type: Optional[DatabaseType] = None):
     global _qdrantStore, _milvusStore, _pgStore
-    settings = Settings()
+    settings = get_settings()
     logging.info(f'collection name to be used: {settings.COLLECTION_NAME},'
                  f' and vector store will be used: {db_type if db_type else settings.VECTOR_STORE}')
 
