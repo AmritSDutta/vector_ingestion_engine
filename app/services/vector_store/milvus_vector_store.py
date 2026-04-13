@@ -2,7 +2,8 @@ import logging
 from typing import Sequence, Dict, Optional, Any
 
 from pandas import DataFrame
-from pymilvus import MilvusClient, DataType, Function, FunctionType, MilvusException, AnnSearchRequest
+from pymilvus import DataType, Function, FunctionType, MilvusException, AnnSearchRequest, \
+    AsyncMilvusClient
 
 from app.config.config import get_settings
 from app.services.vector_store.vector_store import VectorStore, get_reranker_model, validate_collection_name
@@ -16,7 +17,7 @@ class MilvusStore(VectorStore):
         settings = get_settings()
         self.collection_name = collection_name if collection_name else settings.COLLECTION_NAME
 
-        self.client = MilvusClient(
+        self.async_client = AsyncMilvusClient(
             uri=settings.MILVUS_URI,
             token=settings.MILVUS_TOKEN,
             timeout=30,
@@ -25,11 +26,6 @@ class MilvusStore(VectorStore):
         logging.info(f"Connected to DB: {settings.MILVUS_URI} successfully")
         validate_collection_name(self.collection_name)
 
-        # Check if the collection exists
-        check_collection = self.client.has_collection(self.collection_name)
-
-        if check_collection:
-            logging.info(f"Existing collection {self.collection_name} confirmed")
         self.reranker = get_reranker_model()
 
     async def create(self):
@@ -38,11 +34,11 @@ class MilvusStore(VectorStore):
         validate_collection_name(coll_name)
 
         logging.info(f"Creating Milvus collection: {coll_name}")
-        if self.client.has_collection(collection_name=coll_name):
+        if await self.async_client.has_collection(collection_name=coll_name):
             logging.info(f"Collection {coll_name} already exists.")
             return
 
-        schema = self.client.create_schema(auto_id=False, enable_dynamic_field=True)
+        schema = self.async_client.create_schema(auto_id=False, enable_dynamic_field=True)
         schema.add_field(field_name="ResumeID", datatype=DataType.VARCHAR, is_primary=True, max_length=100)
         schema.add_field(field_name="Name", datatype=DataType.VARCHAR, max_length=500)
         schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=settings.EMBEDDING_DIM)
@@ -59,7 +55,7 @@ class MilvusStore(VectorStore):
         )
         schema.add_function(bm25_function)
 
-        index_params = self.client.prepare_index_params()
+        index_params = self.async_client.prepare_index_params()
         index_params.add_index(
             field_name="sparse",
 
@@ -79,7 +75,7 @@ class MilvusStore(VectorStore):
             index_name="vector_index"
         )
 
-        self.client.create_collection(
+        await self.async_client.create_collection(
             collection_name=coll_name,
             schema=schema,
             index_params=index_params
@@ -109,7 +105,7 @@ class MilvusStore(VectorStore):
                 }
                 insert_data.append(record)
 
-            self.client.insert(collection_name=coll_name, data=insert_data)
+            await self.async_client.insert(collection_name=coll_name, data=insert_data)
             logging.info(f"Uploaded {len(insert_data)} records to Milvus collection: {coll_name}")
 
         except MilvusException as milvus_exception:
@@ -119,7 +115,7 @@ class MilvusStore(VectorStore):
     async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> Dict:
         try:
             # 1. Search in Milvus
-            search_res = self.client.search(
+            search_res = await self.async_client.search(
                 collection_name=self.collection_name,
                 data=[list(query_embedding)],
                 limit=n_results,
@@ -158,10 +154,10 @@ class MilvusStore(VectorStore):
             logging.info(f"collection name is None ")
             return None
         try:
-            check_collection = self.client.has_collection(self.collection_name)
+            check_collection = await self.async_client.has_collection(self.collection_name)
             if check_collection:
                 logging.info(f"dropping Existing collection {self.collection_name} confirmed")
-                self.client.drop_collection(self.collection_name)
+                await self.async_client.drop_collection(self.collection_name)
             logging.info(f"Deleted Milvus collection if existed: {self.collection_name}")
             return self.collection_name
         except MilvusException as milvus_exception:
@@ -170,7 +166,7 @@ class MilvusStore(VectorStore):
 
     async def list_collection(self) -> list[str]:
         try:
-            return self.client.list_collections()
+            return await self.async_client.list_collections()
         except MilvusException as milvus_exception:
             logging.error(f"Milvus persistence error: {milvus_exception}", exc_info=True)
             raise
@@ -207,7 +203,7 @@ class MilvusStore(VectorStore):
                     "k": 100  # Optional
                 }
             )
-            res = self.client.hybrid_search(
+            res = await self.async_client.hybrid_search(
                 collection_name=self.collection_name,
                 reqs=reqs,
                 ranker=ranker,
