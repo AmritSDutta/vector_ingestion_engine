@@ -31,18 +31,32 @@ class MistralAIEmbeddingService(EmbeddingService):
     async def embed_batch(
             self,
             texts: Sequence[str],
-            batch_size: int = 50,
+            batch_size: int = 5,
             output_dimensionality: int = 1024,
     ):
         """Batch embedding for large text collections."""
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+        max_tokens = 8000
 
         texts = list(texts)
         if not texts:
             return []
 
+        # Truncate each text to max_tokens
+        truncated_texts = []
+        for text in texts:
+            tokens = tokenizer.encode(text)
+            if len(tokens) > max_tokens:
+                truncated_tokens = tokens[:max_tokens]
+                truncated_text = tokenizer.decode(truncated_tokens)
+                truncated_texts.append(truncated_text)
+            else:
+                truncated_texts.append(text)
+
         final_embeddings = []
 
-        chunks = [texts[x: x + batch_size] for x in range(0, len(texts), batch_size)]
+        chunks = [truncated_texts[x: x + batch_size] for x in range(0, len(truncated_texts), batch_size)]
         embeddings_response = [
             await self.client.embeddings.create_async(model=self.model, inputs=c) for c in chunks
         ]

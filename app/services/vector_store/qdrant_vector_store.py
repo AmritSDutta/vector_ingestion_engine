@@ -1,9 +1,9 @@
 import logging
 from typing import Sequence, Optional, Any
 
+import qdrant_client
 from fastembed import SparseTextEmbedding, LateInteractionTextEmbedding
 from pandas import DataFrame
-from qdrant_client import QdrantClient
 from qdrant_client.http.models import models, CollectionsResponse, UpdateResult
 
 from app.config.config import get_settings
@@ -19,7 +19,7 @@ class QdrantStore(VectorStore):
         self.collection_name = settings.COLLECTION_NAME
         validate_collection_name(self.collection_name)
 
-        self.qdrant_client = QdrantClient(
+        self.qdrant_client = qdrant_client.AsyncQdrantClient(
             url=settings.QDRANT_HOST,
             port=settings.QDRANT_PORT,
             api_key=settings.QDRANT_API_KEY,
@@ -34,12 +34,12 @@ class QdrantStore(VectorStore):
         validate_collection_name(effective_collection_name)
 
         try:
-            if self.qdrant_client.collection_exists(effective_collection_name):
+            if await self.qdrant_client.collection_exists(effective_collection_name):
                 logging.info(f'existing collection: {effective_collection_name}')
                 return
 
             logging.info(f'creating collection: {effective_collection_name}')
-            self.qdrant_client.create_collection(
+            await self.qdrant_client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config={
                     "genai": models.VectorParams(
@@ -115,21 +115,23 @@ class QdrantStore(VectorStore):
             total_points = len(points)
             for i in range(0, total_points, batch_size):
                 batch_points = points[i:i + batch_size]
-                result: UpdateResult = self.qdrant_client.upsert(
+                result: UpdateResult = await self.qdrant_client.upsert(
                     collection_name=self.collection_name,
                     points=batch_points
                 )
-                logging.info(f'Successfully uploaded batch {i // batch_size + 1}, {len(batch_points)} points. Status: {result.status}')
+                logging.info(
+                    f'Successfully uploaded batch {i // batch_size + 1}, {len(batch_points)} points. Status: {result.status}')
             logging.info(f'Successfully uploaded total {total_points} points to {self.collection_name}')
 
         except Exception as e:
             logging.error(f'Qdrant persistence error: {e}', exc_info=True)
             raise
 
-    async def query(self, query_embedding: Sequence[float], n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+    async def query(self, query_embedding: Sequence[float], n_results: int = 3,
+                    query: str = '') -> dict[str, list[Any]]:
         # 1. dense ranking
         try:
-            hits = self.qdrant_client.query_points(
+            hits = await self.qdrant_client.query_points(
                 collection_name=self.collection_name,
                 query=list(query_embedding),
                 using="genai",
@@ -173,7 +175,7 @@ class QdrantStore(VectorStore):
             logging.info(f"collection name is None ")
             return None
         try:
-            self.qdrant_client.delete_collection(self.collection_name)
+            await self.qdrant_client.delete_collection(self.collection_name)
             logging.info(f'deleted collection: {self.collection_name}')
             return self.collection_name
         except Exception as e:
@@ -183,7 +185,7 @@ class QdrantStore(VectorStore):
     async def list_collection(self) -> list[str]:
         logging.info('listing collection')
         try:
-            response: CollectionsResponse = self.qdrant_client.get_collections()
+            response: CollectionsResponse = await self.qdrant_client.get_collections()
             logging.info(f'returned collections: {response.collections}')
             existing_collections_list = [collection.name for collection in response.collections]
             logging.info(f'found {len(existing_collections_list)} collections')
@@ -193,7 +195,7 @@ class QdrantStore(VectorStore):
             raise
 
     async def hybrid_search(self, query_embedding: Sequence[float],
-                      n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
+                            n_results: int = 3, query: str = '') -> dict[str, list[Any]]:
         from qdrant_client.http import models
 
         # 1. Generate query components locally using FastEmbed
@@ -202,7 +204,7 @@ class QdrantStore(VectorStore):
 
         try:
             # 2. Single-call Multi-stage Search: (Dense + Sparse) -> RRF -> ColBERT Rerank
-            response = self.qdrant_client.query_points(
+            response = await self.qdrant_client.query_points(
                 collection_name=self.collection_name,
                 prefetch=[
                     models.Prefetch(

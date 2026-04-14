@@ -64,6 +64,8 @@ async def ingest_and_store_to_all_database(progress_callback: Callable[[str], No
     data["embeddings"] = embeddings
 
     for db in DatabaseType:
+        if db == DatabaseType.QDRANT or db == DatabaseType.POSTGRES:
+            continue
         logging.info(f"Trying: {db}, Name: {db.name}, Value: {db.value}")
         vstore = get_vector_store(db)
         await vstore.create()

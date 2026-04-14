@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 class MilvusStore(VectorStore):
 
-    def __init__(self, collection_name: Optional[str] = "resume_details"):
+    def __init__(self):
         settings = get_settings()
-        self.collection_name = collection_name if collection_name else settings.COLLECTION_NAME
+        self.collection_name = settings.COLLECTION_NAME
 
         self.async_client = AsyncMilvusClient(
             uri=settings.MILVUS_URI,
