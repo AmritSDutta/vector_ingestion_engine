@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    API_USERNAME: str = "admin"
+    API_PASSWORD: str = "secret"
+    IS_AUTH_ENABLED: bool = True
+
     EMBEDDER: str = "genai"
     VECTOR_STORE: str = "milvus"
     CHROMA_DIR: str = "data/chroma"
@@ -39,10 +43,11 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: str = 'key'
     DATA_FILE_PATH: str = 'data/resume_sample_160.jsonl'
 
-    MILVUS_URI: str = "localhost"
+    MILVUS_URI: str = "http://localhost:19530"
     MILVUS_TOKEN: str = "TOKEN"
 
     DB_DSN: str = 'postgres://some_user:some_password@localhost/resume_vector_db'
+
     DB_NAME: str = 'resume_vector_db'
     DB_USER: str = 'some_user'
     DB_PASSWORD: str = 'some_password'
