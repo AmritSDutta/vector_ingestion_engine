@@ -20,10 +20,30 @@ A high-performance, production-ready Retrieval-Augmented Generation (RAG) pipeli
 *   **Optimized PG Schema:** Native Full-Text Search (`tsvector`) and high-performance array searching (`TEXT[]`) with `asyncpg` connection pooling and double-checked locking.
 
 ### 4. Enterprise-Grade Security & Eval
+*   **HTTP Basic Auth:** Secure access to all `/api` endpoints with timing-attack resistant digest comparison and a configurable toggle.
 *   **PII Redaction:** Automatic anonymization of sensitive data using **Microsoft Presidio**.
 *   **Content Moderation:** Integrated with **OpenAI Moderation API** and custom pattern-based threat detection.
 *   **RAG Evaluation:** Automated faithfulness and context relevancy scoring using **LlamaIndex** and OpenAI `gpt-4o-mini`.
 *   **Rate Limiting:** Protects endpoints using `fastapi-limiter`.
+
+---
+
+## 🔒 Security & Authentication
+
+The engine implements **HTTP Basic Authentication** for all endpoints under the `/api` prefix. This layer ensures that only authorized clients can trigger ingestion or perform queries.
+
+### Key Features:
+- **Digest Comparison:** Uses `secrets.compare_digest` to prevent timing attacks during credential verification.
+- **Configurable Toggle:** Authentication can be enabled or disabled via the `IS_AUTH_ENABLED` flag.
+- **Global Protection:** Enforced at the router level in `app/main.py`.
+
+### Configuration:
+To configure authentication, add the following to your `.env` file:
+```env
+IS_AUTH_ENABLED=True
+API_USERNAME=admin
+API_PASSWORD=your_secure_password
+```
 
 ---
 
@@ -154,6 +174,11 @@ Create a `.env` file in the root directory:
 GOOGLE_API_KEY=your_gemini_key
 OPENAI_API_KEY=your_openai_key
 MISTRAL_API_KEY=your_mistral_key
+
+# Authentication (Optional/Toggleable)
+IS_AUTH_ENABLED=True
+API_USERNAME=admin
+API_PASSWORD=your_secure_password
 
 # Infrastructure
 REDIS_URL=redis://localhost:6379/0
