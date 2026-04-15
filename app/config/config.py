@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     BATCH_SIZE: int = 15
 
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_PASSWORD: str = 'REDIS_PASSWORD'
 
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     PII_CONFIDENCE_THRESHOLD: float = 0.7

@@ -209,6 +209,7 @@ Open a new terminal and run:
 *   **Windows (Required):**
     ```bash
     celery -A app.celery_worker worker --loglevel=info -P solo
+    celery -A app.celery_worker flower
     ```
 *   **Linux/Mac:**
     ```bash
