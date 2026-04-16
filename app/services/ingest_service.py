@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Callable
 import pandas as pd
@@ -54,7 +55,7 @@ async def ingest_and_store_to_all_database(progress_callback: Callable[[str], No
     logging.info(f"Total rows selected from file: {len(data)}")
 
     redacted_texts = await pii_redactor.do_pii_redaction_text(data["overall"].tolist())
-    
+
     texts_to_embed = [clear_stop_words(text) for text in redacted_texts]
     if progress_callback:
         progress_callback('Embedding started')
@@ -63,14 +64,19 @@ async def ingest_and_store_to_all_database(progress_callback: Callable[[str], No
     embeddings: list[Any] = await _get_custom_embedding(texts_to_embed)
     data["embeddings"] = embeddings
 
-    for db in DatabaseType:
-        logging.info(f"Trying: {db}, Name: {db.name}, Value: {db.value}")
-        vstore = get_vector_store(db)
-        await vstore.create()
-        await vstore.save(data)
-        logging.info(f"Completed saving: {db}, Name: {db.name}, Value: {db.value}")
-        if progress_callback:
-            progress_callback(f'Saved to Vector Store: {db.value}')
+    # Parallel ingestion with error shielding
+    tasks = [_ingest_in_db(data, db, progress_callback) for db in DatabaseType]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
     logging.info(f'Successfully indexes built and stored in vector store, rows: {len(data)}')
     return {"status": "success", "rows": len(data)}
+
+
+async def _ingest_in_db(data, db: DatabaseType, progress_callback: Callable[[str], None] | None):
+    logging.info(f"Trying: {db}, Name: {db.name}, Value: {db.value}")
+    vstore = get_vector_store(db)
+    await vstore.create()
+    await vstore.save(data)
+    logging.info(f"Completed saving: {db}, Name: {db.name}, Value: {db.value}")
+    if progress_callback:
+        progress_callback(f'Saved to Vector Store : {db.value}')
