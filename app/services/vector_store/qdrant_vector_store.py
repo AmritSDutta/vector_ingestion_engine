@@ -45,6 +45,13 @@ class QdrantStore(VectorStore):
                     "genai": models.VectorParams(
                         size=settings.EMBEDDING_DIM,
                         distance=models.Distance.COSINE,
+                        quantization_config=models.ScalarQuantization(
+                            scalar=models.ScalarQuantizationConfig(
+                                type=models.ScalarType.INT8,
+                                quantile=0.99,
+                                always_ram=True,
+                            ),
+                        ),
                         on_disk=True
                     ),
                     "colbert": models.VectorParams(
