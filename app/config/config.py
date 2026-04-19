@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     CHROMA_DIR: str = "data/chroma"
 
     EMBEDDING_DIM: int = 1024
-    EMBEDDING_MODEL: str = "models/gemini-embedding-001"
+    EMBEDDING_MODEL: str = "models/gemini-embedding-001"  # mistral-embed
     GENAI_MODEL: str = "gemini-2.5-flash-lite"
     OPENAI_MODEL: str = "gpt-5-nano"
 
