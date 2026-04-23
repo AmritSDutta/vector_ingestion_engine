@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DOTENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(dotenv_path=DOTENV_PATH)
+load_dotenv(dotenv_path=DOTENV_PATH, override=True)
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +24,6 @@ class Settings(BaseSettings):
 
     EMBEDDER: str = "genai"
     VECTOR_STORE: str = "milvus"
-    CHROMA_DIR: str = "data/chroma"
 
     EMBEDDING_DIM: int = 1024
     EMBEDDING_MODEL: str = "models/gemini-embedding-001"  # mistral-embed
@@ -77,7 +76,4 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
         logging.info("Settings Loaded")
-        # print(DOTENV_PATH)
-        logging.info(f"CWD: {os.getcwd()}")
-        # logging.info(f"model_dump: {_settings.model_dump()}")
     return _settings
