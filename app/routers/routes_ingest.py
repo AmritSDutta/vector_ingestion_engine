@@ -6,9 +6,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel
 from pyrate_limiter import Limiter, Rate, Duration
+from celery import chain, group
 from app.celery_worker import celery_app
-from app.celery_task import ingest_task_wrapper, ingest_all_db_task_wrapper
-from app.services.vector_store.VectorStoreFactory import get_vector_store
+from app.celery_task import (
+    ingest_task_wrapper,
+    prepare_data_task,
+    ingest_single_db_task
+)
+from app.services.vector_store.VectorStoreFactory import get_vector_store, DatabaseType
 
 logger = logging.getLogger(__name__)
 ingest_router = APIRouter(prefix="/ingest", tags=["ingestion"])
@@ -116,8 +121,17 @@ async def upload_data_to_all() -> dict[str, str]:
     """
     try:
         logger.info("Received request to upload files and start ingestion to all DB.")
-        task = ingest_all_db_task_wrapper.delay()
-        logger.info(f"Ingestion task triggered successfully with task_id: {task.id}")
+
+        # Build the Celery Canvas workflow:
+        # 1. Prepare data (PII redaction + Embedding)
+        # 2. Parallel ingestion into all supported databases
+        workflow = chain(
+            prepare_data_task.s(),
+            group(ingest_single_db_task.s(db.name) for db in DatabaseType)
+        )
+        task = workflow.delay()
+
+        logger.info(f"Ingestion workflow triggered successfully with task_id: {task.id}")
 
         # Trigger the background poller
         asyncio.create_task(_poll_task_status(task.id))

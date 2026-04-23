@@ -9,7 +9,8 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 redis_url = settings.REDIS_URL
-logging.info(f"Starting celery worker {redis_url}")
+logging.info(f"Starting celery worker: {redis_url}")
+
 # Singleton Celery instance configuration
 celery_app = Celery(
     "worker",
@@ -23,6 +24,7 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_track_started=True,
     broker_pool_limit=1,
-    redis_max_connections=10
-
+    redis_max_connections=10,
+    task_reject_on_worker_lost=True,
+    task_acks_on_failure_or_timeout=False
 )
