@@ -3,8 +3,8 @@ import logging
 from typing import Optional, Sequence, Dict, Any
 
 import asyncpg
-
 from pandas import DataFrame
+
 from app.config.config import get_settings
 from app.services.vector_store.vector_store import VectorStore, get_reranker_model, validate_collection_name
 
@@ -247,7 +247,8 @@ class PGVectorStore(VectorStore):
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             try:
-                rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+                rows = await conn.fetch(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
                 return [r["table_name"] for r in rows]
             except Exception as e:
                 logger.error(f"Postgres list error: {e}", exc_info=True)

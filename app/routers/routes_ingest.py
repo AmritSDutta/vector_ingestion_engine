@@ -2,17 +2,18 @@ import asyncio
 import logging
 from typing import Optional, Any
 
+from celery import chain, group
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel
 from pyrate_limiter import Limiter, Rate, Duration
-from celery import chain, group
-from app.celery_worker import celery_app
+
 from app.celery_task import (
     ingest_task_wrapper,
     prepare_data_task,
     ingest_single_db_task
 )
+from app.celery_worker import celery_app
 from app.services.vector_store.VectorStoreFactory import get_vector_store, DatabaseType
 
 logger = logging.getLogger(__name__)

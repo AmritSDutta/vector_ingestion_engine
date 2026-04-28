@@ -1,6 +1,8 @@
 import asyncio
 import logging
+
 from celery import Task
+
 from app.celery_worker import celery_app
 from app.config.logging_config import setup_logging
 from app.services.ingest_service import (

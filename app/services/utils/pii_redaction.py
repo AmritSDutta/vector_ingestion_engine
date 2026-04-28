@@ -5,13 +5,14 @@ from typing import List, Tuple
 from presidio_analyzer import AnalyzerEngine, RecognizerResult
 from presidio_anonymizer import AnonymizerEngine
 
-from app.config.config import Settings, get_settings
+from app.config.config import get_settings
 
 
 class PII_Redactor:
     """
     Helps in doing redaction of given langchain based messages
     """
+
     def __init__(self, confidence_threshold: float = get_settings().PII_CONFIDENCE_THRESHOLD):
         self.analyzer = AnalyzerEngine(supported_languages=["en"])
         self.anonymizer = AnonymizerEngine()

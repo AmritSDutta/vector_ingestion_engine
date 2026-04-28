@@ -1,7 +1,8 @@
-import asyncio
 import logging
 from typing import Any, Callable
+
 import pandas as pd
+
 from app.config.config import get_settings
 from app.services.embedding.EmbeddingFactory import get_embedding_service
 from app.services.utils.text_cleaner import clear_stop_words
@@ -99,13 +100,15 @@ async def prepare_ingestion_data(progress_callback: Callable[[str], None] = None
     embeddings: list[Any] = await _get_custom_embedding(texts_to_embed)
     data["embeddings"] = embeddings
 
-    prepared_file_path = str(get_settings().data_file_path.parent / f"{get_settings().data_file_path.stem}_prepared.json")
+    prepared_file_path = str(
+        get_settings().data_file_path.parent / f"{get_settings().data_file_path.stem}_prepared.json")
     data.to_json(prepared_file_path, orient='records')
     logging.info(f"Prepared data saved to: {prepared_file_path}")
     return prepared_file_path
 
 
-async def ingest_prepared_data_to_db(filepath: str, db_name: str, progress_callback: Callable[[str], None] = None) -> dict:
+async def ingest_prepared_data_to_db(filepath: str, db_name: str,
+                                     progress_callback: Callable[[str], None] = None) -> dict:
     logging.info(f"Loading prepared data from: {filepath} for DB: {db_name}")
     data = pd.read_json(filepath)
     db = DatabaseType[db_name]

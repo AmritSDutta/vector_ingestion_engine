@@ -1,4 +1,4 @@
-from typing import Dict, Sequence, Optional, Any
+from typing import Dict, Sequence, Any
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from pandas import DataFrame
