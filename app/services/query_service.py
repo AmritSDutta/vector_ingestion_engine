@@ -2,8 +2,8 @@ import logging
 from typing import Any
 
 from app.services.embedding.EmbeddingFactory import get_embedding_service
-from app.services.vector_store.VectorStoreFactory import get_vector_store
 from app.services.utils.time_helper import time_coro
+from app.services.vector_store.VectorStoreFactory import get_vector_store
 
 logger = logging.getLogger(__name__)
 

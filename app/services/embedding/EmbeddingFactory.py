@@ -1,6 +1,6 @@
 import logging
 
-from app.config.config import Settings, get_settings
+from app.config.config import get_settings
 from app.services.embedding.MistralAIEmbeddingService import MistralAIEmbeddingService
 from app.services.embedding.genai_service import GenAIEmbeddingService
 

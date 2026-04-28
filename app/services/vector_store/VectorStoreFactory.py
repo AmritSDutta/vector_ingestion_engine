@@ -4,8 +4,8 @@ from typing import Optional
 
 from app.config.config import get_settings
 from app.services.vector_store.milvus_vector_store import MilvusStore
-from app.services.vector_store.qdrant_vector_store import QdrantStore
 from app.services.vector_store.postgres_vector_store import PGVectorStore
+from app.services.vector_store.qdrant_vector_store import QdrantStore
 
 logger = logging.getLogger(__name__)
 _qdrantStore: QdrantStore | None = None

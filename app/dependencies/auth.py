@@ -1,7 +1,9 @@
 import secrets
 from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
 from app.config.config import get_settings
 
 # Set auto_error=False to allow us to handle the error manually based on the flag

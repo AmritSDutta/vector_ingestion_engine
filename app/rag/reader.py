@@ -3,7 +3,7 @@ import os
 import shutil
 from pathlib import Path
 
-from app.config.config import Settings, get_settings
+from app.config.config import get_settings
 
 
 def read_files(files: list[str]) -> Path:

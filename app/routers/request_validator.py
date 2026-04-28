@@ -3,7 +3,7 @@ import logging
 import re
 
 from fastapi import HTTPException
-from openai import  RateLimitError, APIError, APIConnectionError, AsyncOpenAI
+from openai import RateLimitError, APIError, APIConnectionError, AsyncOpenAI
 from openai.types import ModerationCreateResponse
 
 logger = logging.getLogger(__name__)
